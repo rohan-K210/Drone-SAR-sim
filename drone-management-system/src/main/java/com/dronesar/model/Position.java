@@ -46,6 +46,14 @@ public class Position {
         return Math.sqrt(dx * dx + dy * dy);
     }
 
+    /**
+     * Calculates heading in degrees to another position (0 = East, 90 = South).
+     */
+    public double angleTo(Position other) {
+        if (other == null) return 0.0;
+        return Math.toDegrees(Math.atan2(other.y - this.y, other.x - this.x));
+    }
+
     @Override
     public boolean equals(Object obj) {
 
