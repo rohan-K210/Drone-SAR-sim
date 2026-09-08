@@ -1,0 +1,281 @@
+/* ==========================================================================
+   SAR DRONE FLEET MISSION CONTROL - TACTICAL DARK THEME
+   ========================================================================== */
+
+.root {
+    -fx-base: #0a0f18;
+    -fx-background-color: #060a10;
+    -fx-text-fill: #e2e8f0;
+    -fx-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* Telemetry HUD Panel */
+.telemetry-hud {
+    -fx-background-color: rgba(11, 19, 32, 0.95);
+    -fx-border-color: #1e293b;
+    -fx-border-width: 0 0 1 0;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.5), 10, 0, 0, 4);
+}
+
+.metric-title {
+    -fx-text-fill: #64748b;
+    -fx-font-family: "Menlo", "Consolas", monospace;
+    -fx-font-size: 9px;
+    -fx-font-weight: bold;
+}
+
+.metric-value {
+    -fx-font-family: "Menlo", "Consolas", monospace;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+}
+
+.metric-cyan { -fx-text-fill: #38bdf8; }
+.metric-emerald { -fx-text-fill: #10b981; }
+.metric-rose { -fx-text-fill: #f43f5e; }
+.metric-sky { -fx-text-fill: #0ea5e9; }
+
+.ticker-title {
+    -fx-text-fill: #38bdf8;
+    -fx-font-family: "Menlo", "Consolas", monospace;
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+}
+
+.ticker-text {
+    -fx-text-fill: #94a3b8;
+    -fx-font-family: "Menlo", "Consolas", monospace;
+    -fx-font-size: 10px;
+}
+
+/* Right Status Panel */
+.status-panel {
+    -fx-background-color: #0b111a;
+    -fx-border-color: #1e293b;
+    -fx-border-width: 0 0 0 1;
+}
+
+.panel-section-header {
+    -fx-text-fill: #38bdf8;
+    -fx-font-family: "Menlo", "Consolas", monospace;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-padding: 0 0 4 0;
+    -fx-border-color: #1e293b;
+    -fx-border-width: 0 0 1 0;
+}
+
+.panel-scroll {
+    -fx-background-color: transparent;
+    -fx-background: transparent;
+    -fx-border-color: transparent;
+}
+.panel-scroll > .viewport {
+    -fx-background-color: transparent;
+}
+
+/* Drone Card */
+.drone-card {
+    -fx-background-radius: 4px;
+    -fx-border-radius: 4px;
+    -fx-background-color: #0f172a;
+    -fx-border-color: #1e293b;
+    -fx-border-width: 1px;
+}
+.drone-card-failed {
+    -fx-border-color: #ef4444;
+    -fx-background-color: rgba(239, 68, 68, 0.08);
+}
+
+.drone-card-title {
+    -fx-text-fill: #f8fafc;
+    -fx-font-family: "Menlo", "Consolas", monospace;
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+}
+
+.drone-card-sub {
+    -fx-text-fill: #94a3b8;
+    -fx-font-family: "Menlo", "Consolas", monospace;
+    -fx-font-size: 9px;
+}
+
+.status-badge {
+    -fx-font-family: "Menlo", "Consolas", monospace;
+    -fx-font-size: 8px;
+    -fx-font-weight: bold;
+    -fx-padding: 1 4 1 4;
+    -fx-border-radius: 3px;
+    -fx-background-radius: 3px;
+    -fx-background-color: rgba(15, 23, 42, 0.8);
+}
+
+/* Detection Log Feed */
+.log-entry {
+    -fx-padding: 5 8 5 8;
+    -fx-background-radius: 4px;
+    -fx-border-radius: 4px;
+    -fx-border-width: 1px;
+}
+.log-text {
+    -fx-font-family: "Menlo", "Consolas", monospace;
+    -fx-font-size: 9px;
+    -fx-line-spacing: 2px;
+}
+
+.log-entry-detected {
+    -fx-background-color: rgba(239, 68, 68, 0.12);
+    -fx-border-color: #ef4444;
+}
+.log-entry-detected .label { -fx-text-fill: #fca5a5; }
+
+.log-entry-info {
+    -fx-background-color: rgba(56, 189, 248, 0.08);
+    -fx-border-color: #0284c7;
+}
+.log-entry-info .label { -fx-text-fill: #7dd3fc; }
+
+.log-entry-success {
+    -fx-background-color: rgba(16, 185, 129, 0.12);
+    -fx-border-color: #10b981;
+}
+.log-entry-success .label { -fx-text-fill: #6ee7b7; }
+
+.log-entry-warning {
+    -fx-background-color: rgba(234, 179, 8, 0.12);
+    -fx-border-color: #eab308;
+}
+.log-entry-warning .label { -fx-text-fill: #fde047; }
+
+.log-entry-reroute {
+    -fx-background-color: rgba(168, 85, 247, 0.12);
+    -fx-border-color: #a855f7;
+}
+.log-entry-reroute .label { -fx-text-fill: #d8b4fe; }
+
+/* Control Bar */
+.control-bar {
+    -fx-background-color: #090e17;
+    -fx-border-color: #1e293b;
+    -fx-border-width: 1 0 0 0;
+}
+
+.control-bar .label {
+    -fx-text-fill: #94a3b8;
+    -fx-font-family: "Menlo", "Consolas", monospace;
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+}
+
+.speed-label {
+    -fx-text-fill: #38bdf8;
+    -fx-font-family: "Menlo", "Consolas", monospace;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+}
+
+/* Custom Tactical Buttons */
+.btn {
+    -fx-background-radius: 4px;
+    -fx-font-family: "Menlo", "Consolas", monospace;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-padding: 5 10 5 10;
+    -fx-cursor: hand;
+}
+
+.btn-mini {
+    -fx-font-size: 8px;
+    -fx-padding: 2 6 2 6;
+}
+
+.btn-primary {
+    -fx-background-color: #059669;
+    -fx-text-fill: #ffffff;
+}
+.btn-primary:hover {
+    -fx-background-color: #10b981;
+}
+
+.btn-secondary {
+    -fx-background-color: #1e293b;
+    -fx-text-fill: #cbd5e1;
+    -fx-border-color: #334155;
+    -fx-border-radius: 4px;
+}
+.btn-secondary:hover {
+    -fx-background-color: #334155;
+}
+
+.btn-warning {
+    -fx-background-color: #d97706;
+    -fx-text-fill: #ffffff;
+}
+.btn-warning:hover {
+    -fx-background-color: #f59e0b;
+}
+
+.btn-danger {
+    -fx-background-color: #991b1b;
+    -fx-text-fill: #fecaca;
+    -fx-border-color: #ef4444;
+    -fx-border-radius: 4px;
+}
+.btn-danger:hover {
+    -fx-background-color: #dc2626;
+    -fx-text-fill: #ffffff;
+}
+
+/* Checkboxes */
+.check-box {
+    -fx-text-fill: #cbd5e1;
+    -fx-font-family: "Menlo", "Consolas", monospace;
+    -fx-font-size: 10px;
+}
+.check-box .box {
+    -fx-background-color: #1e293b;
+    -fx-border-color: #475569;
+    -fx-border-radius: 2px;
+}
+.check-box:selected .mark {
+    -fx-background-color: #10b981;
+}
+
+/* Sliders */
+.slider .track {
+    -fx-background-color: #1e293b;
+    -fx-pref-height: 4px;
+}
+.slider .thumb {
+    -fx-background-color: #38bdf8;
+    -fx-pref-width: 12px;
+    -fx-pref-height: 12px;
+}
+
+/* Progress Bar */
+.progress-bar .track {
+    -fx-background-color: #1e293b;
+    -fx-background-radius: 2px;
+}
+.progress-bar .bar {
+    -fx-background-color: #10b981;
+    -fx-background-radius: 2px;
+}
+
+/* ComboBox */
+.combo-box-dark {
+    -fx-background-color: #1e293b;
+    -fx-border-color: #334155;
+    -fx-border-radius: 4px;
+}
+.combo-box-dark .list-cell {
+    -fx-text-fill: #f8fafc;
+    -fx-font-family: "Menlo", "Consolas", monospace;
+    -fx-font-size: 10px;
+}
+
+/* Separators */
+.separator *.line {
+    -fx-border-color: #1e293b;
+    -fx-border-width: 1px;
+}
