@@ -15,7 +15,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 public class SimulationController {
 
-    private final List<Drone> drones;
+    private final List<Drone> drones;// Thread-safe list for concurrent access
     private final CommunicationManager communicationManager;
     private boolean running;
 
