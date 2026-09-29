@@ -6,6 +6,7 @@ import com.dronesar.event.SimulationEventListener;
 import com.dronesar.model.DetectionEvent;
 import com.dronesar.model.Drone;
 import com.dronesar.model.Position;
+import com.dronesar.model.Tower;
 import com.dronesar.model.enums.DroneState;
 
 import javax.swing.*;
@@ -18,12 +19,13 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 
 /**
- * Status and Telemetry panel displaying active drones, direct tower link status,
- * fault injection controls, and real-time SAR event logs.
+ * Status and Telemetry panel displaying active drones, direct dual-tower link status,
+ * individual drone command controls, and real-time SAR event logs.
  */
 public class StatusPanel extends JPanel implements SimulationEventListener {
 
     private final SimulationController controller;
+    private ForestCanvas forestCanvas;
     private final JTable droneTable;
     private final DefaultTableModel tableModel;
     private final JTextArea eventLogArea;
@@ -32,15 +34,15 @@ public class StatusPanel extends JPanel implements SimulationEventListener {
     public StatusPanel(SimulationController controller) {
         this.controller = controller;
 
-        setLayout(new BorderLayout(0, 10));
+        setLayout(new BorderLayout(0, 8));
         setBackground(Theme.BG_PANEL);
-        setPreferredSize(new Dimension(380, 560));
+        setPreferredSize(new Dimension(390, 560));
         setBorder(new MatteBorder(0, 1, 0, 0, Theme.BORDER_SUBTLE));
 
         // 1. Top Header
         JPanel headerPanel = new JPanel(new BorderLayout());
         headerPanel.setBackground(Theme.BG_PANEL);
-        headerPanel.setBorder(new EmptyBorder(12, 14, 6, 14));
+        headerPanel.setBorder(new EmptyBorder(10, 14, 4, 14));
 
         JLabel titleLabel = new JLabel("FLEET TELEMETRY & TOWER FEED");
         titleLabel.setFont(Theme.FONT_HEADING);
@@ -60,14 +62,27 @@ public class StatusPanel extends JPanel implements SimulationEventListener {
         droneTable.setBackground(Theme.BG_DARK);
         droneTable.setForeground(Theme.TEXT_PRIMARY);
         droneTable.setGridColor(Theme.BORDER_SUBTLE);
-        droneTable.setRowHeight(24);
+        droneTable.setRowHeight(22);
         droneTable.setFont(Theme.FONT_SMALL);
         droneTable.getTableHeader().setBackground(Theme.BG_CONTROL);
         droneTable.getTableHeader().setForeground(Theme.TEXT_SECONDARY);
         droneTable.getTableHeader().setFont(Theme.FONT_SMALL);
         droneTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 
-        // Custom Cell Renderer for status colors
+        // Selection Listener: highlight drone on canvas when table row selected
+        droneTable.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                int row = droneTable.getSelectedRow();
+                if (row >= 0 && row < tableModel.getRowCount()) {
+                    String id = (String) tableModel.getValueAt(row, 0);
+                    if (forestCanvas != null) {
+                        forestCanvas.setSelectedDroneId(id);
+                    }
+                }
+            }
+        });
+
+        // Custom Cell Renderer for status and tower links
         droneTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
@@ -78,11 +93,12 @@ public class StatusPanel extends JPanel implements SimulationEventListener {
                     String status = String.valueOf(value);
                     if ("SEARCHING".equals(status)) setForeground(Theme.GREEN_ONLINE);
                     else if ("PERSON_FOUND".equals(status)) setForeground(Theme.AMBER_WARN);
-                    else if ("OFFLINE".equals(status) || "EMERGENCY".equals(status)) setForeground(Theme.RED_ALERT);
+                    else if ("IDLE".equals(status)) setForeground(Theme.TEXT_MUTED);
+                    else if ("OFFLINE".equals(status)) setForeground(Theme.RED_ALERT);
                     else setForeground(Theme.TEXT_PRIMARY);
                 } else if (column == 4) { // Tower Link column
                     String link = String.valueOf(value);
-                    if ("CONNECTED".equals(link)) setForeground(Theme.CYAN_ACCENT);
+                    if (link != null && link.startsWith("BASE-")) setForeground(Theme.CYAN_ACCENT);
                     else setForeground(Theme.TEXT_MUTED);
                 } else {
                     setForeground(Theme.TEXT_PRIMARY);
@@ -92,37 +108,73 @@ public class StatusPanel extends JPanel implements SimulationEventListener {
         });
 
         JScrollPane tableScrollPane = new JScrollPane(droneTable);
-        tableScrollPane.setPreferredSize(new Dimension(360, 190));
+        tableScrollPane.setPreferredSize(new Dimension(370, 160));
         tableScrollPane.setBorder(new MatteBorder(1, 0, 1, 0, Theme.BORDER_SUBTLE));
         tableScrollPane.getViewport().setBackground(Theme.BG_DARK);
 
-        // Action button to simulate drone failure
-        JButton btnToggleFailure = new JButton("Toggle Selected Drone Failure");
-        btnToggleFailure.setFont(Theme.FONT_SMALL);
-        btnToggleFailure.setBackground(Theme.BG_CONTROL);
-        btnToggleFailure.setForeground(Theme.AMBER_WARN);
-        btnToggleFailure.setFocusPainted(false);
-        btnToggleFailure.addActionListener(e -> {
-            int selectedRow = droneTable.getSelectedRow();
-            if (selectedRow >= 0) {
-                String droneId = (String) tableModel.getValueAt(selectedRow, 0);
-                controller.toggleDroneFailure(droneId);
-                logEvent("ALERT", "Drone " + droneId + " operational state toggled.");
+        // 3. Individual Drone Tactical Control Buttons
+        JPanel droneControlBox = new JPanel(new GridLayout(2, 2, 6, 6));
+        droneControlBox.setBackground(Theme.BG_PANEL);
+        droneControlBox.setBorder(new EmptyBorder(6, 12, 6, 12));
+
+        JButton btnPauseResume = createCommandButton("⏸ / ▶ Pause/Resume", Theme.CYAN_ACCENT);
+        btnPauseResume.addActionListener(e -> {
+            String selectedId = getSelectedDroneId();
+            if (selectedId != null) {
+                controller.toggleDronePause(selectedId);
+                logEvent("CMD", "Drone " + selectedId + " pause state toggled.");
             } else {
-                JOptionPane.showMessageDialog(this, "Please select a drone from the table first.", "Info", JOptionPane.INFORMATION_MESSAGE);
+                showSelectDroneAlert();
             }
         });
 
-        JPanel tableWrapper = new JPanel(new BorderLayout(0, 6));
-        tableWrapper.setBackground(Theme.BG_PANEL);
-        tableWrapper.setBorder(new EmptyBorder(0, 12, 6, 12));
-        tableWrapper.add(tableScrollPane, BorderLayout.CENTER);
-        tableWrapper.add(btnToggleFailure, BorderLayout.SOUTH);
+        JButton btnResumeSearch = createCommandButton("🔄 Sweep Sector", Theme.GREEN_ONLINE);
+        btnResumeSearch.addActionListener(e -> {
+            String selectedId = getSelectedDroneId();
+            if (selectedId != null) {
+                controller.resumeDroneSearch(selectedId);
+                logEvent("CMD", "Drone " + selectedId + " ordered to resume sector sweep.");
+            } else {
+                showSelectDroneAlert();
+            }
+        });
 
-        // 3. Real-Time Event Log Feed
-        JPanel logPanel = new JPanel(new BorderLayout(0, 6));
+        JButton btnRecall = createCommandButton("🏠 Recall to Base", Theme.BLUE_TOWER);
+        btnRecall.addActionListener(e -> {
+            String selectedId = getSelectedDroneId();
+            if (selectedId != null) {
+                controller.recallDroneToBase(selectedId);
+                logEvent("CMD", "Drone " + selectedId + " recalled to nearest Base Tower.");
+            } else {
+                showSelectDroneAlert();
+            }
+        });
+
+        JButton btnToggleFail = createCommandButton("⚠️ Toggle Fail", Theme.AMBER_WARN);
+        btnToggleFail.addActionListener(e -> {
+            String selectedId = getSelectedDroneId();
+            if (selectedId != null) {
+                controller.toggleDroneFailure(selectedId);
+                logEvent("ALERT", "Drone " + selectedId + " failure toggled.");
+            } else {
+                showSelectDroneAlert();
+            }
+        });
+
+        droneControlBox.add(btnPauseResume);
+        droneControlBox.add(btnResumeSearch);
+        droneControlBox.add(btnRecall);
+        droneControlBox.add(btnToggleFail);
+
+        JPanel tableWrapper = new JPanel(new BorderLayout(0, 4));
+        tableWrapper.setBackground(Theme.BG_PANEL);
+        tableWrapper.add(tableScrollPane, BorderLayout.CENTER);
+        tableWrapper.add(droneControlBox, BorderLayout.SOUTH);
+
+        // 4. Real-Time Event Log Feed
+        JPanel logPanel = new JPanel(new BorderLayout(0, 4));
         logPanel.setBackground(Theme.BG_PANEL);
-        logPanel.setBorder(new EmptyBorder(6, 12, 12, 12));
+        logPanel.setBorder(new EmptyBorder(4, 12, 10, 12));
 
         JLabel logHeader = new JLabel("MISSION INCIDENTS & TOWER DISPATCH");
         logHeader.setFont(Theme.FONT_HEADING);
@@ -150,16 +202,52 @@ public class StatusPanel extends JPanel implements SimulationEventListener {
         add(headerPanel, BorderLayout.NORTH);
         add(centerContainer, BorderLayout.CENTER);
 
-        // Register to event bus (Delegation Event Model)
+        // Register to event bus
         SimulationEventBus.getInstance().registerListener(this);
-        logEvent("SYS", "Command Center & Direct Tower Comms initialized.");
+        logEvent("SYS", "Dual-Tower Comms & Mission Center online.");
+    }
+
+    public void setForestCanvas(ForestCanvas canvas) {
+        this.forestCanvas = canvas;
+    }
+
+    public void setSelectedDroneInTable(String droneId) {
+        if (droneId == null) return;
+        for (int i = 0; i < tableModel.getRowCount(); i++) {
+            if (droneId.equals(tableModel.getValueAt(i, 0))) {
+                droneTable.setRowSelectionInterval(i, i);
+                break;
+            }
+        }
+    }
+
+    private String getSelectedDroneId() {
+        int row = droneTable.getSelectedRow();
+        if (row >= 0 && row < tableModel.getRowCount()) {
+            return (String) tableModel.getValueAt(row, 0);
+        }
+        return null;
+    }
+
+    private void showSelectDroneAlert() {
+        JOptionPane.showMessageDialog(this, "Please select a drone from the table or click on a drone on the radar map.", "Target Selection Required", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private JButton createCommandButton(String text, Color accent) {
+        JButton btn = new JButton(text);
+        btn.setFont(Theme.FONT_SMALL);
+        btn.setBackground(Theme.BG_CONTROL);
+        btn.setForeground(accent);
+        btn.setFocusPainted(false);
+        btn.setBorder(BorderFactory.createLineBorder(Theme.BORDER_SUBTLE, 1));
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        return btn;
     }
 
     public void updateTelemetryTable() {
         int rowCount = tableModel.getRowCount();
         java.util.List<Drone> drones = controller.getDrones();
 
-        // Adjust row count if necessary
         if (rowCount != drones.size()) {
             tableModel.setRowCount(0);
             for (Drone d : drones) {
@@ -169,12 +257,12 @@ public class StatusPanel extends JPanel implements SimulationEventListener {
 
         for (int i = 0; i < drones.size(); i++) {
             Drone d = drones.get(i);
-            boolean inRange = controller.isDroneInTowerRange(d);
+            Tower connectedTower = controller.getNearestTowerInRange(d);
             tableModel.setValueAt(d.getId(), i, 0);
             tableModel.setValueAt(d.getAssignedZoneId(), i, 1);
             tableModel.setValueAt(d.getState().name(), i, 2);
             tableModel.setValueAt(String.format("%.0f%%", d.getBatteryLevel()), i, 3);
-            tableModel.setValueAt(inRange ? "CONNECTED" : "NO LINK", i, 4);
+            tableModel.setValueAt(connectedTower != null ? connectedTower.getId().replace("BASE-", "") : "NO LINK", i, 4);
         }
     }
 
@@ -188,19 +276,15 @@ public class StatusPanel extends JPanel implements SimulationEventListener {
     }
 
     @Override
-    public void onDroneMoved(String droneId, Position newPos, double heading) {
-        // High frequency, handled in periodic table update
-    }
+    public void onDroneMoved(String droneId, Position newPos, double heading) {}
 
     @Override
     public void onPersonDetected(DetectionEvent event) {
-        logEvent("DETECT", "Survivor LOCATED: " + event.getPersonName() + " (" + event.getPersonId() + ") by " + event.getOriginDroneId());
+        logEvent("DETECT", "Survivor FOUND: " + event.getPersonName() + " (" + event.getPersonId() + ") by " + event.getOriginDroneId());
     }
 
     @Override
-    public void onZoneCoverageUpdated(String zoneId, double coveragePercentage) {
-        // Handled in HUD
-    }
+    public void onZoneCoverageUpdated(String zoneId, double coveragePercentage) {}
 
     @Override
     public void onDroneStatusChanged(String droneId, DroneState newStatus) {
@@ -214,6 +298,6 @@ public class StatusPanel extends JPanel implements SimulationEventListener {
 
     @Override
     public void onPacketDeliveredToTower(DetectionEvent event) {
-        logEvent("BASE", "CONFIRMED: " + event.getPersonName() + " logged at Base Tower! Rescue dispatched.");
+        logEvent("BASE", "CONFIRMED: " + event.getPersonName() + " logged at Base Tower! Rescue team notified.");
     }
 }

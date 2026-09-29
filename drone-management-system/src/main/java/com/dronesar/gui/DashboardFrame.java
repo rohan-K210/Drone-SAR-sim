@@ -39,6 +39,9 @@ public class DashboardFrame extends JFrame {
         this.statusPanel = new StatusPanel(controller);
         this.controlBar = new ControlBarPanel(controller);
 
+        this.statusPanel.setForestCanvas(forestCanvas);
+        this.forestCanvas.setStatusPanel(statusPanel);
+
         // Place components according to BorderLayout (Syllabus Module 4)
         add(hudPanel, BorderLayout.NORTH);
         add(forestCanvas, BorderLayout.CENTER);
