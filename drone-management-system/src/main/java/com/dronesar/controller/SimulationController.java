@@ -235,21 +235,22 @@ public class SimulationController {
     }
 
     private void checkPendingTransmissions() {
-        Iterator<DetectionEvent> it = pendingOfflineEvents.iterator();
-        while (it.hasNext()) {
-            DetectionEvent event = it.next();
+        List<DetectionEvent> toSend = new ArrayList<>();
+        for (DetectionEvent event : pendingOfflineEvents) {
             Drone drone = getDrone(event.getOriginDroneId());
             if (drone != null && isDroneInTowerRange(drone)) {
-                it.remove();
+                toSend.add(event);
                 transmitDetectionToTower(drone, event);
             }
+        }
+        if (!toSend.isEmpty()) {
+            pendingOfflineEvents.removeAll(toSend);
         }
     }
 
     private void updateActiveSignals(double deltaSeconds) {
-        Iterator<TransmissionSignal> iterator = activeSignals.iterator();
-        while (iterator.hasNext()) {
-            TransmissionSignal signal = iterator.next();
+        List<TransmissionSignal> arrivedSignals = new ArrayList<>();
+        for (TransmissionSignal signal : activeSignals) {
             boolean arrived = signal.step(deltaSeconds * speedMultiplier);
             if (arrived) {
                 signal.getEvent().setSuccessfullyDelivered(true);
@@ -265,8 +266,11 @@ public class SimulationController {
                     originDrone.setState(DroneState.SEARCHING);
                     SimulationEventBus.getInstance().publishDroneStatusChanged(originDrone.getId(), DroneState.SEARCHING);
                 }
-                iterator.remove();
+                arrivedSignals.add(signal);
             }
+        }
+        if (!arrivedSignals.isEmpty()) {
+            activeSignals.removeAll(arrivedSignals);
         }
     }
 

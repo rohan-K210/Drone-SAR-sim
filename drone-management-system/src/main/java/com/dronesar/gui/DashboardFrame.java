@@ -50,11 +50,16 @@ public class DashboardFrame extends JFrame {
 
         // 60 FPS Animation & Simulation Loop Timer (every 16ms)
         this.animationTimer = new Timer(16, e -> {
-            controller.tick(0.016);
-            forestCanvas.repaint();
-            hudPanel.updateMetrics();
-            statusPanel.updateTelemetryTable();
-            controlBar.updatePlayPauseButton();
+            try {
+                controller.tick(0.016);
+                forestCanvas.repaint();
+                hudPanel.updateMetrics();
+                statusPanel.updateTelemetryTable();
+                controlBar.updatePlayPauseButton();
+            } catch (Exception ex) {
+                System.err.println("Animation loop error: " + ex.getMessage());
+                ex.printStackTrace();
+            }
         });
         this.animationTimer.start();
 
