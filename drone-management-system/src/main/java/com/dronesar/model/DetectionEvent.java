@@ -2,13 +2,10 @@ package com.dronesar.model;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 import java.util.Objects;
 
 /**
- * Event generated when a drone locates a missing person and relays telemetry back to base.
+ * Event generated when a drone locates a missing person and alerts the central base tower.
  */
 public class DetectionEvent {
     private final String eventId;
@@ -16,21 +13,21 @@ public class DetectionEvent {
     private final String personName;
     private final Position coordinates;
     private final String originDroneId;
+    private final String towerId;
     private final LocalDateTime timestamp;
-    private final List<String> route;
     private boolean successfullyDelivered;
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     public DetectionEvent(String eventId, String personId, String personName,
-                          Position coordinates, String originDroneId, List<String> route) {
+                          Position coordinates, String originDroneId, String towerId) {
         this.eventId = eventId;
         this.personId = personId;
         this.personName = personName;
         this.coordinates = coordinates;
         this.originDroneId = originDroneId;
+        this.towerId = towerId;
         this.timestamp = LocalDateTime.now();
-        this.route = new ArrayList<>(route);
         this.successfullyDelivered = false;
     }
 
@@ -54,6 +51,10 @@ public class DetectionEvent {
         return originDroneId;
     }
 
+    public String getTowerId() {
+        return towerId;
+    }
+
     public LocalDateTime getTimestamp() {
         return timestamp;
     }
@@ -62,24 +63,12 @@ public class DetectionEvent {
         return timestamp.format(TIME_FMT);
     }
 
-    public List<String> getRoute() {
-        return Collections.unmodifiableList(route);
-    }
-
-    public int getHopCount() {
-        return Math.max(0, route.size() - 1);
-    }
-
     public boolean isSuccessfullyDelivered() {
         return successfullyDelivered;
     }
 
     public void setSuccessfullyDelivered(boolean successfullyDelivered) {
         this.successfullyDelivered = successfullyDelivered;
-    }
-
-    public String getRouteString() {
-        return String.join(" ➔ ", route);
     }
 
     @Override
@@ -96,7 +85,7 @@ public class DetectionEvent {
 
     @Override
     public String toString() {
-        return String.format("[%s] Person %s (%s) @ %s via %s (Hops: %d)",
-                getFormattedTime(), personId, personName, coordinates, getRouteString(), getHopCount());
+        return String.format("[%s] Target: %s (%s) @ %s | Drone: %s -> Tower: %s",
+                getFormattedTime(), personId, personName, coordinates, originDroneId, towerId);
     }
 }
