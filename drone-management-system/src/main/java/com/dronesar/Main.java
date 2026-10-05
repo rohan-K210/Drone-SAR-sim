@@ -1,18 +1,26 @@
 package com.dronesar;
 
-import com.dronesar.gui.MainView;
+import com.dronesar.controller.SimulationController;
+import com.dronesar.gui.DashboardFrame;
+
+import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
 
 /**
- * Entry point for the Drone SAR Fleet Management System.
- * Delegates to MainView, which is the JavaFX Application class.
+ * Main application launcher for the Drone SAR Fleet Management System.
  */
-public final class Main {
-
-    private Main() {
-        // utility class
-    }
-
+public class Main {
     public static void main(String[] args) {
-        MainView.main(args);
+        // Set cross-platform look-and-feel or system look-and-feel
+        try {
+            UIManager.setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName());
+        } catch (Exception ignored) {
+        }
+
+        SwingUtilities.invokeLater(() -> {
+            SimulationController controller = new SimulationController();
+            DashboardFrame frame = new DashboardFrame(controller);
+            frame.setVisible(true);
+        });
     }
 }

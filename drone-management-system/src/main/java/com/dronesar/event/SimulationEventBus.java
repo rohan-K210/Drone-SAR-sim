@@ -7,6 +7,10 @@ import com.dronesar.model.enums.DroneState;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+/**
+ * Event bus implementing Singleton design pattern (Syllabus Module 3)
+ * and Delegation Event Model (Syllabus Module 4).
+ */
 public class SimulationEventBus {
     private static final SimulationEventBus INSTANCE = new SimulationEventBus();
     private final List<SimulationEventListener> listeners = new CopyOnWriteArrayList<>();
@@ -51,21 +55,27 @@ public class SimulationEventBus {
         }
     }
 
+    public void publishDirectTransmission(String droneId, String towerId, DetectionEvent event) {
+        for (SimulationEventListener listener : listeners) {
+            listener.onDirectTransmission(droneId, towerId, event);
+        }
+    }
+
     public void publishMultiHopRoute(String eventId, List<String> routeNodeIds) {
         for (SimulationEventListener listener : listeners) {
             listener.onMultiHopRouteCalculated(eventId, routeNodeIds);
         }
     }
 
-    public void publishPacketDelivered(DetectionEvent event) {
-        for (SimulationEventListener listener : listeners) {
-            listener.onPacketDeliveredToTower(event);
-        }
-    }
-
     public void publishRouteRecalculated(String eventId, List<String> newRouteNodeIds) {
         for (SimulationEventListener listener : listeners) {
             listener.onRouteRecalculated(eventId, newRouteNodeIds);
+        }
+    }
+
+    public void publishPacketDelivered(DetectionEvent event) {
+        for (SimulationEventListener listener : listeners) {
+            listener.onPacketDeliveredToTower(event);
         }
     }
 }
