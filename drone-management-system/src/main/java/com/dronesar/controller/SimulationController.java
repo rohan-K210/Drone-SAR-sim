@@ -4,15 +4,16 @@ import com.dronesar.event.SimulationEventBus;
 import com.dronesar.model.*;
 import com.dronesar.model.enums.DroneState;
 import com.dronesar.network.CommunicationManager;
-import com.dronesar.network.DijkstraRouter;
-import com.dronesar.network.MeshNetworkGraph;
-import com.dronesar.network.NetworkNode;
 import com.dronesar.search.SearchPattern;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+/**
+ * Controller class in MVC architecture (Syllabus Module 4).
+ * Coordinates drones, search sectors, dual-base towers, and direct wireless communications.
+ */
 public class SimulationController {
 
     private final List<Drone> drones;
@@ -26,11 +27,11 @@ public class SimulationController {
     private final Map<String, List<Position>> droneWaypoints = new ConcurrentHashMap<>();
     private final Map<String, Integer> droneWaypointIndex = new ConcurrentHashMap<>();
     private final List<PersonNode> targets = new CopyOnWriteArrayList<>();
-    private Tower centralTower;
+    private final List<Tower> towers = new CopyOnWriteArrayList<>();
 
-    private final MeshNetworkGraph meshGraph = new MeshNetworkGraph();
     private final List<DetectionEvent> allDetectionEvents = new CopyOnWriteArrayList<>();
-    private final List<ActiveRelaySession> activeRelaySessions = new CopyOnWriteArrayList<>();
+    private final List<TransmissionSignal> activeSignals = new CopyOnWriteArrayList<>();
+    private final List<DetectionEvent> pendingOfflineEvents = new CopyOnWriteArrayList<>();
 
     private double speedMultiplier = 1.0;
     private long elapsedSimulationMillis = 0;
@@ -54,17 +55,23 @@ public class SimulationController {
         droneWaypoints.clear();
         droneWaypointIndex.clear();
         targets.clear();
+        towers.clear();
         allDetectionEvents.clear();
-        activeRelaySessions.clear();
+        activeSignals.clear();
+        pendingOfflineEvents.clear();
         elapsedSimulationMillis = 0;
 
-        centralTower = new Tower("BASE-TOWER-01", "Command Base Station", new Position(75, 480), 220.0);
+        // 1. Establish Two Strategic Communication Towers for Full Map Coverage
+        // West Command Base (South-West)
+        towers.add(new Tower("BASE-WEST-01", "West Base Tower", new Position(70, 470), 340.0));
+        // East Outpost Base (North-East)
+        towers.add(new Tower("BASE-EAST-02", "East Base Tower", new Position(850, 95), 340.0));
 
         int cols = (droneCount >= 8) ? 4 : 3;
         int rows = (droneCount >= 8) ? 2 : 2;
         int actualCount = Math.min(droneCount, cols * rows);
 
-        double zoneMarginLeft = 135.0;
+        double zoneMarginLeft = 140.0;
         double usableWidth = mapWidth - zoneMarginLeft - 20.0;
         double usableHeight = mapHeight - 35.0;
 
@@ -82,7 +89,7 @@ public class SimulationController {
                 double maxY = minY + cellHeight;
 
                 String zoneId = "Z-" + zoneCounter;
-                String zoneName = "Sector-" + (char)('A' + (zoneCounter - 1));
+                String zoneName = "Sector-" + (char) ('A' + (zoneCounter - 1));
                 SearchZone zone = new SearchZone(zoneId, zoneName, minX, minY, maxX, maxY);
                 String droneId = String.format("DRONE-%02d", zoneCounter);
                 String callsign = "Eagle-" + zoneCounter;
@@ -90,40 +97,51 @@ public class SimulationController {
                 zones.add(zone);
 
                 double sensorRadius = 38.0;
-                double laneSpacing = sensorRadius * 1.6;
-                List<Position> wps = SearchPattern.generateBoustrophedonWaypoints(zone, laneSpacing, 18.0);
-                droneWaypoints.put(droneId, wps);
-                droneWaypointIndex.put(droneId, 0);
+                double laneSpacing = sensorRadius * 1.5;
+                List<Position> wps = SearchPattern.generateBoustrophedonWaypoints(zone, laneSpacing, 16.0);
 
-                Position startPos = wps.isEmpty() ? zone.getCenter() : wps.get(0);
-                Drone drone = new Drone(droneId, callsign, zoneId, startPos, sensorRadius, 230.0);
+                // Stagger sweep direction and starting positions so drones move independently
+                if (zoneCounter % 2 == 1 && wps.size() > 2) {
+                    Collections.reverse(wps);
+                }
+
+                droneWaypoints.put(droneId, wps);
+                int startingWpIdx = (zoneCounter * 3) % Math.max(1, wps.size());
+                droneWaypointIndex.put(droneId, startingWpIdx);
+
+                Position startPos = (wps.isEmpty()) ? zone.getCenter() : wps.get(startingWpIdx);
+                Drone drone = new Drone(droneId, callsign, zoneId, startPos, sensorRadius, 340.0);
+
+                // Give each drone a distinct operational speed (2.1 to 2.8 units)
+                drone.setSpeed(2.1 + ((zoneCounter * 7) % 4) * 0.25);
                 addDrone(drone);
 
                 zoneCounter++;
             }
         }
 
+        // Deploy lost persons across search sectors
         targets.add(new PersonNode("P-101", "Rahul K.", new Position(280, 110)));
         targets.add(new PersonNode("P-102", "Ananya M.", new Position(540, 190)));
-        targets.add(new PersonNode("P-103", "Vineeth S.", new Position(790, 130)));
+        targets.add(new PersonNode("P-103", "Vineeth S.", new Position(780, 140)));
         targets.add(new PersonNode("P-104", "Deepa T.", new Position(410, 410)));
         targets.add(new PersonNode("P-105", "Arun J.", new Position(720, 450)));
-
-        updateMeshNetworkTopology();
     }
 
     public synchronized void tick(double deltaSeconds) {
         if (!running) return;
 
         double effectiveDelta = deltaSeconds * speedMultiplier;
-        elapsedSimulationMillis += (long)(effectiveDelta * 1000);
+        elapsedSimulationMillis += (long) (effectiveDelta * 1000);
 
-        if (centralTower != null) {
-            centralTower.updateBeacon();
+        for (Tower tower : towers) {
+            tower.updateBeacon();
         }
 
+        // Update each drone independently
         for (Drone drone : drones) {
-            if (!drone.isOperational() || drone.getState() == DroneState.SWEEP_COMPLETE) {
+            // If offline, idle (manually paused), or out of battery, hold position
+            if (!drone.isOperational() || drone.getState() == DroneState.IDLE) {
                 continue;
             }
 
@@ -134,19 +152,14 @@ public class SimulationController {
             Position targetWp = wps.get(currIdx);
             Position currentPos = drone.getPosition();
 
-            double stepDist = drone.getSpeed() * speedMultiplier * 1.2;
+            double stepDist = drone.getSpeed() * speedMultiplier * 1.15;
             double distToTarget = currentPos.distanceTo(targetWp);
 
             if (distToTarget <= stepDist) {
                 drone.setPosition(targetWp);
+                // Continuous search: loop waypoints so drones keep patrolling
                 int nextIdx = (currIdx + 1) % wps.size();
                 droneWaypointIndex.put(drone.getId(), nextIdx);
-
-                SearchZone zone = findZoneById(drone.getAssignedZoneId());
-                if (nextIdx == 0 && zone != null && zone.getCoveragePercentage() > 95.0) {
-                    drone.setState(DroneState.SWEEP_COMPLETE);
-                    SimulationEventBus.getInstance().publishDroneStatusChanged(drone.getId(), DroneState.SWEEP_COMPLETE);
-                }
             } else {
                 double angle = Math.atan2(targetWp.getY() - currentPos.getY(), targetWp.getX() - currentPos.getX());
                 double newX = currentPos.getX() + Math.cos(angle) * stepDist;
@@ -161,13 +174,13 @@ public class SimulationController {
                 SimulationEventBus.getInstance().publishZoneCoverageUpdated(zone.getId(), zone.getCoveragePercentage());
             }
 
-            drone.consumeBattery(0.006 * effectiveDelta);
+            drone.consumeBattery(0.005 * effectiveDelta);
             SimulationEventBus.getInstance().publishDroneMoved(drone.getId(), drone.getPosition(), drone.getHeading());
         }
 
-        updateMeshNetworkTopology();
         checkPersonDetections();
-        updateRelaySessions();
+        checkPendingTransmissions();
+        updateActiveSignals(deltaSeconds);
 
         for (PersonNode target : targets) {
             target.updatePulseAnimation();
@@ -179,14 +192,16 @@ public class SimulationController {
             if (target.isDetected()) continue;
 
             for (Drone drone : drones) {
-                if (!drone.isOperational()) continue;
+                if (!drone.isOperational() || drone.getState() == DroneState.IDLE) continue;
 
                 if (drone.getPosition().distanceTo(target.getLocation()) <= drone.getSensorRadius()) {
                     target.markDetected(drone.getId());
                     drone.setState(DroneState.PERSON_FOUND);
                     SimulationEventBus.getInstance().publishDroneStatusChanged(drone.getId(), DroneState.PERSON_FOUND);
 
-                    List<String> route = DijkstraRouter.findShortestPath(meshGraph, drone.getId(), centralTower.getId());
+                    Tower nearestTower = getNearestTower(drone.getPosition());
+                    String towerId = (nearestTower != null) ? nearestTower.getId() : "BASE-WEST-01";
+
                     String eventId = "EVT-" + (System.currentTimeMillis() % 10000);
                     DetectionEvent event = new DetectionEvent(
                             eventId,
@@ -194,86 +209,158 @@ public class SimulationController {
                             target.getName(),
                             target.getLocation(),
                             drone.getId(),
-                            route
+                            towerId
                     );
 
                     allDetectionEvents.add(event);
                     SimulationEventBus.getInstance().publishPersonDetected(event);
 
-                    if (!route.isEmpty()) {
-                        SimulationEventBus.getInstance().publishMultiHopRoute(eventId, route);
-                        activeRelaySessions.add(new ActiveRelaySession(event, route));
-                    }
+                    transmitDetectionToTower(drone, event);
+                    // Crucial: other drones continue their sweep! Only this target check breaks
                     break;
                 }
             }
         }
     }
 
-    private void updateRelaySessions() {
-        Iterator<ActiveRelaySession> iterator = activeRelaySessions.iterator();
-        while (iterator.hasNext()) {
-            ActiveRelaySession session = iterator.next();
-            PacketHop currentHop = session.getCurrentHop();
+    private void transmitDetectionToTower(Drone drone, DetectionEvent event) {
+        Tower towerInRange = getNearestTowerInRange(drone);
+        if (towerInRange != null) {
+            communicationManager.sendToTower(drone, "SURVIVOR FOUND: " + event.getPersonName() + " at " + event.getCoordinates());
+            activeSignals.add(new TransmissionSignal(drone.getId(), towerInRange.getId(), drone.getPosition(), towerInRange.getLocation(), event));
+            SimulationEventBus.getInstance().publishDirectTransmission(drone.getId(), towerInRange.getId(), event);
+        } else {
+            pendingOfflineEvents.add(event);
+        }
+    }
 
-            if (currentHop != null) {
-                currentHop.step();
-                if (currentHop.isComplete()) {
-                    boolean hasMore = session.advanceToNextHop();
-                    if (!hasMore) {
-                        session.getEvent().setSuccessfullyDelivered(true);
-                        centralTower.recordDetection(session.getEvent());
-                        SimulationEventBus.getInstance().publishPacketDelivered(session.getEvent());
+    private void checkPendingTransmissions() {
+        List<DetectionEvent> toSend = new ArrayList<>();
+        for (DetectionEvent event : pendingOfflineEvents) {
+            Drone drone = getDrone(event.getOriginDroneId());
+            if (drone != null && isDroneInTowerRange(drone)) {
+                toSend.add(event);
+                transmitDetectionToTower(drone, event);
+            }
+        }
+        if (!toSend.isEmpty()) {
+            pendingOfflineEvents.removeAll(toSend);
+        }
+    }
 
-                        Drone originDrone = getDrone(session.getEvent().getOriginDroneId());
-                        if (originDrone != null && originDrone.isOperational() && originDrone.getState() == DroneState.PERSON_FOUND) {
-                            originDrone.setState(DroneState.SEARCHING);
-                            SimulationEventBus.getInstance().publishDroneStatusChanged(originDrone.getId(), DroneState.SEARCHING);
-                        }
-                        activeRelaySessions.remove(session);
-                    }
+    private void updateActiveSignals(double deltaSeconds) {
+        List<TransmissionSignal> arrivedSignals = new ArrayList<>();
+        for (TransmissionSignal signal : activeSignals) {
+            boolean arrived = signal.step(deltaSeconds * speedMultiplier);
+            if (arrived) {
+                signal.getEvent().setSuccessfullyDelivered(true);
+                Tower targetTower = getTower(signal.getTowerId());
+                if (targetTower != null) {
+                    targetTower.recordDetection(signal.getEvent());
                 }
+                SimulationEventBus.getInstance().publishPacketDelivered(signal.getEvent());
+
+                // When transmission packet arrives at base, drone resumes search
+                Drone originDrone = getDrone(signal.getDroneId());
+                if (originDrone != null && originDrone.isOperational() && originDrone.getState() == DroneState.PERSON_FOUND) {
+                    originDrone.setState(DroneState.SEARCHING);
+                    SimulationEventBus.getInstance().publishDroneStatusChanged(originDrone.getId(), DroneState.SEARCHING);
+                }
+                arrivedSignals.add(signal);
+            }
+        }
+        if (!arrivedSignals.isEmpty()) {
+            activeSignals.removeAll(arrivedSignals);
+        }
+    }
+
+    // --- Tower Connectivity Logic ---
+    public Tower getNearestTower(Position pos) {
+        if (towers.isEmpty() || pos == null) return null;
+        Tower nearest = null;
+        double minDistance = Double.MAX_VALUE;
+        for (Tower t : towers) {
+            double dist = pos.distanceTo(t.getLocation());
+            if (dist < minDistance) {
+                minDistance = dist;
+                nearest = t;
+            }
+        }
+        return nearest;
+    }
+
+    public Tower getNearestTowerInRange(Drone drone) {
+        if (drone == null || !drone.isOperational()) return null;
+        Tower nearest = null;
+        double minDistance = Double.MAX_VALUE;
+        for (Tower t : towers) {
+            double dist = drone.getPosition().distanceTo(t.getLocation());
+            if (dist <= t.getReceptionRadius() && dist < minDistance) {
+                minDistance = dist;
+                nearest = t;
+            }
+        }
+        return nearest;
+    }
+
+    public boolean isDroneInTowerRange(Drone drone) {
+        return getNearestTowerInRange(drone) != null;
+    }
+
+    public Tower getTower(String id) {
+        for (Tower t : towers) {
+            if (t.getId().equals(id)) return t;
+        }
+        return null;
+    }
+
+    public List<Tower> getTowers() {
+        return Collections.unmodifiableList(towers);
+    }
+
+    public Tower getCentralTower() {
+        return towers.isEmpty() ? null : towers.get(0);
+    }
+
+    // --- Individual Drone GUI Control Methods ---
+    public void toggleDronePause(String droneId) {
+        Drone drone = getDrone(droneId);
+        if (drone != null && drone.isOperational()) {
+            if (drone.getState() == DroneState.IDLE) {
+                drone.setState(DroneState.SEARCHING);
+            } else {
+                drone.setState(DroneState.IDLE);
+            }
+            SimulationEventBus.getInstance().publishDroneStatusChanged(drone.getId(), drone.getState());
+        }
+    }
+
+    public void recallDroneToBase(String droneId) {
+        Drone drone = getDrone(droneId);
+        if (drone != null && drone.isOperational()) {
+            Tower nearest = getNearestTower(drone.getPosition());
+            if (nearest != null) {
+                List<Position> recallWps = new ArrayList<>();
+                recallWps.add(nearest.getLocation());
+                droneWaypoints.put(droneId, recallWps);
+                droneWaypointIndex.put(droneId, 0);
+                drone.setState(DroneState.SEARCHING);
+                SimulationEventBus.getInstance().publishDroneStatusChanged(droneId, DroneState.SEARCHING);
             }
         }
     }
 
-    public void updateMeshNetworkTopology() {
-        meshGraph.clear();
-
-        if (centralTower != null) {
-            meshGraph.addNode(new NetworkNode(
-                    centralTower.getId(),
-                    centralTower.getLocation(),
-                    centralTower.getReceptionRadius(),
-                    true,
-                    true
-            ));
-        }
-
-        for (Drone drone : drones) {
-            meshGraph.addNode(new NetworkNode(
-                    drone.getId(),
-                    drone.getPosition(),
-                    drone.getCommunicationRadius(),
-                    false,
-                    drone.isOperational()
-            ));
-        }
-
-        meshGraph.updateEdges();
-
-        for (ActiveRelaySession session : activeRelaySessions) {
-            PacketHop hop = session.getCurrentHop();
-            if (hop == null) continue;
-
-            NetworkNode nextNode = meshGraph.getNode(hop.getToId());
-            if (nextNode == null || !nextNode.isOnline()) {
-                String currentNodeId = hop.getFromId();
-                List<String> newSubRoute = DijkstraRouter.findShortestPath(meshGraph, currentNodeId, centralTower.getId());
-                if (!newSubRoute.isEmpty()) {
-                    session.reRoute(newSubRoute);
-                    SimulationEventBus.getInstance().publishRouteRecalculated(session.getEvent().getEventId(), newSubRoute);
-                }
+    public void resumeDroneSearch(String droneId) {
+        Drone drone = getDrone(droneId);
+        if (drone != null && drone.isOperational()) {
+            SearchZone zone = findZoneById(drone.getAssignedZoneId());
+            if (zone != null) {
+                double laneSpacing = drone.getSensorRadius() * 1.5;
+                List<Position> wps = SearchPattern.generateBoustrophedonWaypoints(zone, laneSpacing, 16.0);
+                droneWaypoints.put(droneId, wps);
+                droneWaypointIndex.put(droneId, 0);
+                drone.setState(DroneState.SEARCHING);
+                SimulationEventBus.getInstance().publishDroneStatusChanged(droneId, DroneState.SEARCHING);
             }
         }
     }
@@ -283,7 +370,12 @@ public class SimulationController {
         if (drone != null) {
             drone.toggleOffline();
             SimulationEventBus.getInstance().publishDroneStatusChanged(drone.getId(), drone.getState());
-            updateMeshNetworkTopology();
+        }
+    }
+
+    public void addTarget(PersonNode person) {
+        if (person != null) {
+            targets.add(person);
         }
     }
 
@@ -292,14 +384,6 @@ public class SimulationController {
             if (z.getId().equals(id)) return z;
         }
         return null;
-    }
-
-    public Position getNodeCoordinates(String nodeId) {
-        if (centralTower != null && centralTower.getId().equals(nodeId)) {
-            return centralTower.getLocation();
-        }
-        Drone d = getDrone(nodeId);
-        return (d != null) ? d.getPosition() : null;
     }
 
     public void togglePlayPause() {
@@ -312,10 +396,8 @@ public class SimulationController {
 
     public List<SearchZone> getZones() { return zones; }
     public List<PersonNode> getTargets() { return targets; }
-    public Tower getCentralTower() { return centralTower; }
-    public MeshNetworkGraph getMeshGraph() { return meshGraph; }
+    public List<TransmissionSignal> getActiveSignals() { return activeSignals; }
     public List<DetectionEvent> getAllDetectionEvents() { return allDetectionEvents; }
-    public List<ActiveRelaySession> getActiveRelaySessions() { return activeRelaySessions; }
     public long getElapsedSimulationMillis() { return elapsedSimulationMillis; }
 
     public double getOverallCoveragePercentage() {
@@ -327,7 +409,6 @@ public class SimulationController {
         return sum / zones.size();
     }
 
-    // --- Original methods authored by Rohan ---
     public void addDrone(Drone drone) {
         if (drone == null) throw new IllegalArgumentException("Drone cannot be null");
         if (getDrone(drone.getId()) != null) throw new IllegalArgumentException("Drone ID already exists: " + drone.getId());
@@ -350,85 +431,15 @@ public class SimulationController {
         return Collections.unmodifiableList(drones);
     }
 
-    public void updateDronePosition(String droneId, Position position) {
-        Drone drone = getDrone(droneId);
-        if (drone == null) throw new IllegalArgumentException("Drone not found: " + droneId);
-        drone.setPosition(position);
-    }
-
     public void startSimulation() {
         running = true;
-        System.out.println("Drone SAR simulation started.");
     }
 
     public void stopSimulation() {
         running = false;
-        System.out.println("Drone SAR simulation stopped.");
     }
 
     public boolean isRunning() {
         return running;
-    }
-
-    public boolean sendMessageToTower(String droneId, String message) {
-        Drone drone = getDrone(droneId);
-        if (drone == null) throw new IllegalArgumentException("Drone not found: " + droneId);
-        return communicationManager.sendToTower(drone, message);
-    }
-
-    public class ActiveRelaySession {
-        private final DetectionEvent event;
-        private List<String> route;
-        private int currentHopIndex;
-        private PacketHop currentHop;
-
-        public ActiveRelaySession(DetectionEvent event, List<String> route) {
-            this.event = event;
-            this.route = new ArrayList<>(route);
-            this.currentHopIndex = 0;
-            initHop();
-        }
-
-        private void initHop() {
-            if (currentHopIndex < route.size() - 1) {
-                String fromId = route.get(currentHopIndex);
-                String toId = route.get(currentHopIndex + 1);
-                Position fromPos = getNodeCoordinates(fromId);
-                Position toPos = getNodeCoordinates(toId);
-
-                if (fromPos != null && toPos != null) {
-                    this.currentHop = new PacketHop(event.getEventId(), fromId, toId, fromPos, toPos);
-                    Drone drone = getDrone(fromId);
-                    if (drone != null && drone.isOperational() && drone.getState() != DroneState.PERSON_FOUND) {
-                        drone.setState(DroneState.RELAYING);
-                    }
-                }
-            } else {
-                this.currentHop = null;
-            }
-        }
-
-        public boolean advanceToNextHop() {
-            if (currentHopIndex < route.size() - 1) {
-                String prevId = route.get(currentHopIndex);
-                Drone drone = getDrone(prevId);
-                if (drone != null && drone.getState() == DroneState.RELAYING) {
-                    drone.setState(DroneState.SEARCHING);
-                }
-            }
-            currentHopIndex++;
-            initHop();
-            return currentHop != null;
-        }
-
-        public void reRoute(List<String> newSubRoute) {
-            this.route = new ArrayList<>(newSubRoute);
-            this.currentHopIndex = 0;
-            initHop();
-        }
-
-        public DetectionEvent getEvent() { return event; }
-        public List<String> getRoute() { return route; }
-        public PacketHop getCurrentHop() { return currentHop; }
     }
 }
