@@ -32,3 +32,8 @@ nbdist/
 
 # Visual Studio Code
 .vscode/
+
+
+   # Local SQLite database
+   drone_sar.db
+/drone_sar.db

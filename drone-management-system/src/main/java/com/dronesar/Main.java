@@ -1,6 +1,9 @@
 package com.dronesar;
 
 import com.dronesar.controller.SimulationController;
+import com.dronesar.database.DatabaseManager;
+import com.dronesar.database.DetectionPersistenceListener;
+import com.dronesar.event.SimulationEventBus;
 import com.dronesar.gui.DashboardFrame;
 
 import javax.swing.SwingUtilities;
@@ -16,6 +19,9 @@ public class Main {
             UIManager.setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName());
         } catch (Exception ignored) {
         }
+
+        DatabaseManager.createTables();
+        SimulationEventBus.getInstance().registerListener(new DetectionPersistenceListener());
 
         SwingUtilities.invokeLater(() -> {
             SimulationController controller = new SimulationController();

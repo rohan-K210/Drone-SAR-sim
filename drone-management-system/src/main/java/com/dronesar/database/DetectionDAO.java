@@ -1,5 +1,7 @@
 package com.dronesar.database;
 
+import com.dronesar.model.DetectionEvent;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -10,7 +12,7 @@ import java.util.List;
 public class DetectionDAO {
 
     // Save a DetectionEvent directly, extracting its fields for storage
-    public boolean saveDetection(com.dronesar.model.DetectionEvent event) {
+    public boolean saveDetection(DetectionEvent event) {
         return saveDetection(
                 event.getEventId(),
                 event.getPersonId(),
@@ -18,20 +20,21 @@ public class DetectionDAO {
                 event.getCoordinates().getX(),
                 event.getCoordinates().getY(),
                 event.getOriginDroneId(),
-                event.getTimestamp().toString(), // full ISO timestamp, e.g. 2026-01-01T10:00:00
+                event.getTimestamp().toString(),
                 event.getRouteString(),
                 event.getHopCount(),
                 event.isSuccessfullyDelivered()
         );
     }
 
-    // Save a new detection event into the database
+    // Save a detection using plain parameters.
+    // INSERT OR REPLACE: a repeated event_id overwrites the old row instead of failing.
     public boolean saveDetection(String eventId, String personId, String personName,
                                  double x, double y, String droneId, String timestamp,
                                  String route, int hopCount, boolean delivered) {
 
         String sql = """
-            INSERT INTO detections
+            INSERT OR REPLACE INTO detections
             (event_id, person_id, person_name, x, y, drone_id, timestamp, route, hop_count, delivered)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
         """;
@@ -59,6 +62,30 @@ public class DetectionDAO {
         }
     }
 
+    // Update an existing detection once its packet reaches the tower
+    public boolean updateDeliveryStatus(DetectionEvent event) {
+        String sql = """
+            UPDATE detections
+            SET delivered = ?, route = ?, hop_count = ?
+            WHERE event_id = ?;
+        """;
+
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setInt(1, event.isSuccessfullyDelivered() ? 1 : 0);
+            statement.setString(2, event.getRouteString());
+            statement.setInt(3, event.getHopCount());
+            statement.setString(4, event.getEventId());
+
+            return statement.executeUpdate() > 0;
+
+        } catch (SQLException e) {
+            System.out.println("Failed to update delivery status: " + e.getMessage());
+            return false;
+        }
+    }
+
     // Retrieve all detection events (detection history)
     public List<DetectionRecord> getAllDetections() {
         List<DetectionRecord> detections = new ArrayList<>();
@@ -79,7 +106,7 @@ public class DetectionDAO {
         return detections;
     }
 
-    // Find a single detection event by its event ID
+    // Find a single detection by its event ID
     public DetectionRecord findById(String eventId) {
         String sql = "SELECT * FROM detections WHERE event_id = ?;";
 
@@ -98,7 +125,7 @@ public class DetectionDAO {
             System.out.println("Failed to find detection: " + e.getMessage());
         }
 
-        return null; // not found
+        return null;
     }
 
     // Helper: maps a ResultSet row into a DetectionRecord object
