@@ -2,10 +2,15 @@ package com.dronesar.model;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 
 /**
- * Event generated when a drone locates a missing person and alerts the central base tower.
+ * Event generated when a drone locates a missing person and relays telemetry back to base.
+ * Supports both tower-addressed detections (GUI simulation) and mesh-route detections
+ * (multi-hop communication pipeline).
  */
 public class DetectionEvent {
     private final String eventId;
@@ -15,12 +20,25 @@ public class DetectionEvent {
     private final String originDroneId;
     private final String towerId;
     private final LocalDateTime timestamp;
+    private final List<String> route;
     private boolean successfullyDelivered;
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm:ss");
 
+    /** Tower-addressed detection event. */
     public DetectionEvent(String eventId, String personId, String personName,
                           Position coordinates, String originDroneId, String towerId) {
+        this(eventId, personId, personName, coordinates, originDroneId, towerId, Collections.emptyList());
+    }
+
+    /** Mesh-route detection event. */
+    public DetectionEvent(String eventId, String personId, String personName,
+                          Position coordinates, String originDroneId, List<String> route) {
+        this(eventId, personId, personName, coordinates, originDroneId, null, route);
+    }
+
+    private DetectionEvent(String eventId, String personId, String personName,
+                           Position coordinates, String originDroneId, String towerId, List<String> route) {
         this.eventId = eventId;
         this.personId = personId;
         this.personName = personName;
@@ -28,6 +46,7 @@ public class DetectionEvent {
         this.originDroneId = originDroneId;
         this.towerId = towerId;
         this.timestamp = LocalDateTime.now();
+        this.route = route != null ? new ArrayList<>(route) : new ArrayList<>();
         this.successfullyDelivered = false;
     }
 
@@ -63,12 +82,27 @@ public class DetectionEvent {
         return timestamp.format(TIME_FMT);
     }
 
+    public List<String> getRoute() {
+        return Collections.unmodifiableList(route);
+    }
+
+    public int getHopCount() {
+        return Math.max(0, route.size() - 1);
+    }
+
     public boolean isSuccessfullyDelivered() {
         return successfullyDelivered;
     }
 
     public void setSuccessfullyDelivered(boolean successfullyDelivered) {
         this.successfullyDelivered = successfullyDelivered;
+    }
+
+    public String getRouteString() {
+        if (route.isEmpty()) {
+            return towerId != null ? originDroneId + " \u2794 " + towerId : originDroneId;
+        }
+        return String.join(" \u2794 ", route);
     }
 
     @Override
@@ -85,7 +119,8 @@ public class DetectionEvent {
 
     @Override
     public String toString() {
-        return String.format("[%s] Target: %s (%s) @ %s | Drone: %s -> Tower: %s",
-                getFormattedTime(), personId, personName, coordinates, originDroneId, towerId);
+        return String.format("[%s] Target: %s (%s) @ %s | Drone: %s -> Tower: %s | Route: %s (Hops: %d)",
+                getFormattedTime(), personId, personName, coordinates, originDroneId,
+                towerId, getRouteString(), getHopCount());
     }
 }

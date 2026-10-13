@@ -95,6 +95,8 @@ public class Drone {
         return position;
     }
 
+    private double totalDistanceFlown = 0.0;
+
     public synchronized void setPosition(Position position) {
 
         if (position == null) {
@@ -104,10 +106,15 @@ public class Drone {
         }
 
         if (!position.equals(this.position)) {
+            this.totalDistanceFlown += this.position.distanceTo(position);
             this.heading = this.position.angleTo(position);
             this.position = position;
             recordPosition(position);
         }
+    }
+
+    public double getTotalDistanceFlown() {
+        return totalDistanceFlown;
     }
 
     public String getAssignedZoneId() {
