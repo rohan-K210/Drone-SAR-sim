@@ -73,7 +73,7 @@ public class StatusPanel extends JPanel implements SimulationEventListener {
         cardsScroll.getViewport().setBackground(Theme.BG_DARK);
         cardsScroll.getVerticalScrollBar().setUnitIncrement(12);
 
-        ModernScrollBarUI.apply(cardsScroll);
+        Theme.applyModernScrollBar(cardsScroll);
 
         add(cardsScroll, BorderLayout.CENTER);
 

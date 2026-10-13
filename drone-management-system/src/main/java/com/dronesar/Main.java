@@ -17,8 +17,8 @@ public class Main {
         // Set cross-platform look-and-feel or system look-and-feel
         try {
             UIManager.setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName());
-            UIManager.put("ScrollBarUI", "com.dronesar.gui.ModernScrollBarUI");
-            UIManager.put("TabbedPaneUI", "com.dronesar.gui.CyberTabbedPaneUI");
+            UIManager.put("ScrollBarUI", "com.dronesar.gui.Theme$ModernScrollBarUI");
+            UIManager.put("TabbedPaneUI", "com.dronesar.gui.Theme$CyberTabbedPaneUI");
         } catch (Exception ignored) {
         }
 
