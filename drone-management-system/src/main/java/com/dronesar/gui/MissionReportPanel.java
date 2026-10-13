@@ -149,7 +149,7 @@ public class MissionReportPanel extends JPanel {
         survivorScroll.setBorder(BorderFactory.createLineBorder(Theme.BORDER_SUBTLE));
         survivorScroll.setPreferredSize(new Dimension(950, 160));
         survivorScroll.getViewport().setBackground(Theme.BG_DARK);
-        ModernScrollBarUI.apply(survivorScroll);
+        Theme.applyModernScrollBar(survivorScroll);
         survivorCard.add(survivorScroll, BorderLayout.CENTER);
 
         contentContainer.add(survivorCard);
@@ -205,7 +205,7 @@ public class MissionReportPanel extends JPanel {
         droneScroll.setBorder(BorderFactory.createLineBorder(Theme.BORDER_SUBTLE));
         droneScroll.setPreferredSize(new Dimension(950, 160));
         droneScroll.getViewport().setBackground(Theme.BG_DARK);
-        ModernScrollBarUI.apply(droneScroll);
+        Theme.applyModernScrollBar(droneScroll);
         droneCard.add(droneScroll, BorderLayout.CENTER);
 
         contentContainer.add(droneCard);
@@ -224,7 +224,7 @@ public class MissionReportPanel extends JPanel {
         timelineScroll.setBorder(BorderFactory.createLineBorder(Theme.BORDER_SUBTLE));
         timelineScroll.setPreferredSize(new Dimension(950, 150));
         timelineScroll.getViewport().setBackground(Theme.BG_CARD);
-        ModernScrollBarUI.apply(timelineScroll);
+        Theme.applyModernScrollBar(timelineScroll);
         timelineCard.add(timelineScroll, BorderLayout.CENTER);
 
         contentContainer.add(timelineCard);
@@ -253,7 +253,7 @@ public class MissionReportPanel extends JPanel {
         JScrollPane mainScroll = new JScrollPane(contentContainer);
         mainScroll.setBorder(null);
         mainScroll.getViewport().setBackground(Theme.BG_DARK);
-        ModernScrollBarUI.apply(mainScroll);
+        Theme.applyModernScrollBar(mainScroll);
         mainScroll.getVerticalScrollBar().setUnitIncrement(16);
         add(mainScroll, BorderLayout.CENTER);
 

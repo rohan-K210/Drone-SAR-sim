@@ -186,7 +186,7 @@ public class DatabaseViewerPanel extends JPanel implements SimulationEventListen
         panel.setBackground(Theme.BG_DARK);
 
         tabbedPane = new JTabbedPane();
-        tabbedPane.setUI(new CyberTabbedPaneUI());
+        tabbedPane.setUI(new Theme.CyberTabbedPaneUI());
         tabbedPane.setBackground(Theme.BG_DARK);
         tabbedPane.setForeground(Theme.CYAN_ACCENT);
         tabbedPane.setFont(Theme.FONT_HEADING);
@@ -272,7 +272,7 @@ public class DatabaseViewerPanel extends JPanel implements SimulationEventListen
         JScrollPane scrollPane = new JScrollPane(detectionsTable);
         scrollPane.setBorder(BorderFactory.createLineBorder(Theme.BORDER_SUBTLE));
         scrollPane.getViewport().setBackground(Theme.BG_DARK);
-        ModernScrollBarUI.apply(scrollPane);
+        Theme.applyModernScrollBar(scrollPane);
 
         panel.add(scrollPane, BorderLayout.CENTER);
         return panel;
@@ -321,7 +321,7 @@ public class DatabaseViewerPanel extends JPanel implements SimulationEventListen
         JScrollPane scrollPane = new JScrollPane(rawSchemaTable);
         scrollPane.setBorder(BorderFactory.createLineBorder(Theme.BORDER_SUBTLE));
         scrollPane.getViewport().setBackground(Theme.BG_DARK);
-        ModernScrollBarUI.apply(scrollPane);
+        Theme.applyModernScrollBar(scrollPane);
 
         panel.add(scrollPane, BorderLayout.CENTER);
         return panel;
