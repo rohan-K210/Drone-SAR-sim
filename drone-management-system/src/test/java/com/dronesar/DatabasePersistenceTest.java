@@ -106,13 +106,13 @@ public class DatabasePersistenceTest {
         panel.printAll(g2);
         g2.dispose();
 
-        File targetFile = new File("/Users/saviosanil/.gemini/antigravity-ide/brain/74ee2e85-60ac-49a3-84ce-4c4fddbc84db/database_viewer.png");
+        File targetFile = screenshotFile("database_viewer.png");
         try {
             javax.imageio.ImageIO.write(img, "png", targetFile);
             assertTrue(targetFile.exists(), "database_viewer.png must be created");
             assertTrue(targetFile.length() > 1000, "Screenshot file size must be non-empty");
         } catch (Exception e) {
-            fail("Failed to capture DatabaseViewerPanel screenshot: " + e.getMessage());
+            fail("Failed to capture DatabaseViewerPanel screenshot", e);
         }
     }
 
@@ -152,13 +152,25 @@ public class DatabasePersistenceTest {
         simPanel.printAll(g2);
         g2.dispose();
 
-        File targetFile = new File("/Users/saviosanil/.gemini/antigravity-ide/brain/74ee2e85-60ac-49a3-84ce-4c4fddbc84db/simulation_dashboard_clean.png");
+        File targetFile = screenshotFile("simulation_dashboard_clean.png");
         try {
             javax.imageio.ImageIO.write(img, "png", targetFile);
             assertTrue(targetFile.exists(), "simulation_dashboard_clean.png must be created");
         } catch (Exception e) {
-            fail("Failed to capture simulation screenshot: " + e.getMessage());
+            fail("Failed to capture simulation screenshot", e);
         }
+    }
+
+    /**
+     * Resolves a screenshot path under the build output directory so the test is
+     * portable across machines and operating systems.
+     */
+    private static File screenshotFile(String fileName) {
+        File dir = new File("target", "screenshots");
+        if (!dir.isDirectory() && !dir.mkdirs()) {
+            fail("Could not create screenshot directory: " + dir.getAbsolutePath());
+        }
+        return new File(dir, fileName);
     }
 
     private static void layoutTree(Component comp) {
