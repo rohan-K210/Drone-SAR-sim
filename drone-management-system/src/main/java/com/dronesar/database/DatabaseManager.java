@@ -15,11 +15,9 @@ public class DatabaseManager {
     private static volatile DatabaseManager instance;
 
     private final DetectionDAO detectionDAO;
-    private final MissionDAO missionDAO;
 
     private DatabaseManager() {
         this.detectionDAO = new DetectionDAO();
-        this.missionDAO = new MissionDAO();
     }
 
     public static DatabaseManager getInstance() {
@@ -89,10 +87,6 @@ public class DatabaseManager {
         return detectionDAO;
     }
 
-    public MissionDAO getMissionDAO() {
-        return missionDAO;
-    }
-
     public boolean isConnected() {
         try (Connection conn = getConnection()) {
             return conn != null && !conn.isClosed();
@@ -103,6 +97,5 @@ public class DatabaseManager {
 
     public void clearAll() {
         detectionDAO.clear();
-        missionDAO.clear();
     }
 }
