@@ -61,6 +61,18 @@ public class SimulationEventBus {
         }
     }
 
+    public void publishMultiHopRoute(String eventId, List<String> routeNodeIds) {
+        for (SimulationEventListener listener : listeners) {
+            listener.onMultiHopRouteCalculated(eventId, routeNodeIds);
+        }
+    }
+
+    public void publishRouteRecalculated(String eventId, List<String> newRouteNodeIds) {
+        for (SimulationEventListener listener : listeners) {
+            listener.onRouteRecalculated(eventId, newRouteNodeIds);
+        }
+    }
+
     public void publishPacketDelivered(DetectionEvent event) {
         for (SimulationEventListener listener : listeners) {
             listener.onPacketDeliveredToTower(event);
