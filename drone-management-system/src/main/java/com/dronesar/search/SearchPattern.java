@@ -35,7 +35,12 @@ public class SearchPattern {
                 waypoints.add(new Position(currentX, endY));
                 waypoints.add(new Position(currentX, startY));
             }
-            currentX += laneSpacing;
+
+            if (currentX < endX && currentX + laneSpacing > endX) {
+                currentX = endX;
+            } else {
+                currentX += laneSpacing;
+            }
             movingDown = !movingDown;
         }
 

@@ -2,7 +2,7 @@ package com.dronesar.model.enums;
 
 /**
  * Types of radio signals exchanged over the drone mesh network
- * and between drones and the central tower.
+ * and between drones, central towers, and ground rescue teams.
  */
 public enum SignalType {
 
@@ -28,7 +28,15 @@ public enum SignalType {
     COMMAND("Tower Command", "#8b5cf6"),
 
     /** Tower beacon pulse advertising its position and reception radius. */
-    BEACON("Tower Beacon", "#eab308");
+    BEACON("Tower Beacon", "#eab308"),
+
+    // Compatible aliases
+    TELEMETRY_HEARTBEAT("Heartbeat", "#94a3b8"),
+    TARGET_DETECTION("Target Detection", "#ef4444"),
+    WAYPOINT_ACK("Waypoint ACK", "#10b981"),
+    COMMAND_RTH("Command RTH", "#8b5cf6"),
+    LOW_BATTERY_ALERT("Low Battery Alert", "#f97316"),
+    DISTRESS_SOS("Distress SOS", "#ef4444");
 
     private final String displayName;
     private final String hexColor;

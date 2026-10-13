@@ -5,8 +5,33 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
 
+/**
+ * Singleton Database and Persistence Manager (OOP Design Pattern - Singleton / DAO).
+ * Provides thread-safe SQLite connection and data access for detection blackbox logs.
+ */
 public class DatabaseManager {
+
     private static final String URL = "jdbc:sqlite:drone_sar.db";
+    private static volatile DatabaseManager instance;
+
+    private final DetectionDAO detectionDAO;
+    private final MissionDAO missionDAO;
+
+    private DatabaseManager() {
+        this.detectionDAO = new DetectionDAO();
+        this.missionDAO = new MissionDAO();
+    }
+
+    public static DatabaseManager getInstance() {
+        if (instance == null) {
+            synchronized (DatabaseManager.class) {
+                if (instance == null) {
+                    instance = new DatabaseManager();
+                }
+            }
+        }
+        return instance;
+    }
 
     public static Connection getConnection() throws SQLException {
         return DriverManager.getConnection(URL);
@@ -14,9 +39,9 @@ public class DatabaseManager {
 
     public static void testConnection() {
         try (Connection connection = getConnection()) {
-            System.out.println("Database connected successfully!");
+            System.out.println("Database connected successfully! (" + URL + ")");
         } catch (SQLException e) {
-            System.out.println("Database connection failed!");
+            System.err.println("Database connection failed: " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -52,11 +77,32 @@ public class DatabaseManager {
 
             statement.execute(createDetectionsTable);
             statement.execute(createRescueTeamsTable);
-            System.out.println("Tables created successfully (or already existed).");
+            System.out.println("SQLite database tables created successfully in drone_sar.db.");
 
         } catch (SQLException e) {
-            System.out.println("Table creation failed!");
+            System.err.println("Table creation failed: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    public DetectionDAO getDetectionDAO() {
+        return detectionDAO;
+    }
+
+    public MissionDAO getMissionDAO() {
+        return missionDAO;
+    }
+
+    public boolean isConnected() {
+        try (Connection conn = getConnection()) {
+            return conn != null && !conn.isClosed();
+        } catch (SQLException e) {
+            return false;
+        }
+    }
+
+    public void clearAll() {
+        detectionDAO.clear();
+        missionDAO.clear();
     }
 }

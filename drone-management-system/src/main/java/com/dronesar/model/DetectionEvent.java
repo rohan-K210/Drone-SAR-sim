@@ -46,7 +46,7 @@ public class DetectionEvent {
         this.originDroneId = originDroneId;
         this.towerId = towerId;
         this.timestamp = LocalDateTime.now();
-        this.route = new ArrayList<>(route);
+        this.route = route != null ? new ArrayList<>(route) : new ArrayList<>();
         this.successfullyDelivered = false;
     }
 
@@ -99,6 +99,9 @@ public class DetectionEvent {
     }
 
     public String getRouteString() {
+        if (route.isEmpty()) {
+            return towerId != null ? originDroneId + " \u2794 " + towerId : originDroneId;
+        }
         return String.join(" \u2794 ", route);
     }
 

@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -27,7 +28,7 @@ public class MissionDAO {
             return true;
 
         } catch (SQLException e) {
-            System.out.println("Failed to create rescue team: " + e.getMessage());
+            System.err.println("Failed to create rescue team: " + e.getMessage());
             return false;
         }
     }
@@ -51,7 +52,7 @@ public class MissionDAO {
             return rowsAffected > 0;
 
         } catch (SQLException e) {
-            System.out.println("Failed to update rescue status: " + e.getMessage());
+            System.err.println("Failed to update rescue status: " + e.getMessage());
             return false;
         }
     }
@@ -70,7 +71,7 @@ public class MissionDAO {
             }
 
         } catch (SQLException e) {
-            System.out.println("Failed to retrieve active missions: " + e.getMessage());
+            System.err.println("Failed to retrieve active missions: " + e.getMessage());
         }
 
         return missions;
@@ -92,10 +93,20 @@ public class MissionDAO {
             }
 
         } catch (SQLException e) {
-            System.out.println("Failed to find rescue team: " + e.getMessage());
+            System.err.println("Failed to find rescue team: " + e.getMessage());
         }
 
         return null; // not found
+    }
+
+    public void clear() {
+        String sql = "DELETE FROM rescue_teams;";
+        try (Connection connection = DatabaseManager.getConnection();
+             Statement statement = connection.createStatement()) {
+            statement.executeUpdate(sql);
+        } catch (SQLException e) {
+            System.err.println("Failed to clear rescue_teams table: " + e.getMessage());
+        }
     }
 
     // Helper: maps a ResultSet row into a MissionRecord object
@@ -124,5 +135,11 @@ public class MissionDAO {
             this.y = y;
             this.status = status;
         }
+
+        public String getTeamId() { return teamId; }
+        public String getPersonId() { return personId; }
+        public double getX() { return x; }
+        public double getY() { return y; }
+        public String getStatus() { return status; }
     }
 }

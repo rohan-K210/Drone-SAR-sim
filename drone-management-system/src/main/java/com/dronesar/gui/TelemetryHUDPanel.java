@@ -25,8 +25,9 @@ public class TelemetryHUDPanel extends JPanel {
     public TelemetryHUDPanel(SimulationController controller) {
         this.controller = controller;
 
-        setLayout(new FlowLayout(FlowLayout.CENTER, 28, 10));
+        setLayout(new FlowLayout(FlowLayout.CENTER, 28, 8));
         setBackground(Theme.BG_PANEL);
+        setPreferredSize(new Dimension(1280, 62));
         setBorder(new MatteBorder(0, 0, 1, 0, Theme.BORDER_SUBTLE));
 
         lblFleetStatus = createMetricValue("6 / 6 ONLINE", Theme.GREEN_ONLINE);
@@ -59,14 +60,14 @@ public class TelemetryHUDPanel extends JPanel {
         valueLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
         card.add(lblTitle);
-        card.add(Box.createVerticalStrut(3));
+        card.add(Box.createVerticalStrut(2));
         card.add(valueLabel);
         return card;
     }
 
     private JLabel createMetricValue(String initialText, Color color) {
         JLabel label = new JLabel(initialText);
-        label.setFont(Theme.FONT_HEADING);
+        label.setFont(Theme.FONT_TITLE);
         label.setForeground(color);
         return label;
     }

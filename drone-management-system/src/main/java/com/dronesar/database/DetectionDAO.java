@@ -1,37 +1,51 @@
 package com.dronesar.database;
 
+import com.dronesar.model.DetectionEvent;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Data Access Object (DAO Pattern) for SAR detection events.
+ * Persists and queries real-time detection telemetry in the SQLite database (drone_sar.db).
+ */
 public class DetectionDAO {
 
     // Save a DetectionEvent directly, extracting its fields for storage
-    public boolean saveDetection(com.dronesar.model.DetectionEvent event) {
+    public boolean saveDetection(DetectionEvent event) {
+        if (event == null) return false;
         return saveDetection(
                 event.getEventId(),
                 event.getPersonId(),
                 event.getPersonName(),
-                event.getCoordinates().getX(),
-                event.getCoordinates().getY(),
+                event.getCoordinates() != null ? event.getCoordinates().getX() : 0.0,
+                event.getCoordinates() != null ? event.getCoordinates().getY() : 0.0,
                 event.getOriginDroneId(),
-                event.getTimestamp().toString(), // full ISO timestamp, e.g. 2026-01-01T10:00:00
+                event.getTimestamp() != null ? event.getTimestamp().toString() : "",
                 event.getRouteString(),
                 event.getHopCount(),
                 event.isSuccessfullyDelivered()
         );
     }
 
-    // Save a new detection event into the database
+    // Compatible alias for insert
+    public void insert(DetectionEvent event) {
+        saveDetection(event);
+    }
+
+    // Save a detection using plain parameters.
+    // INSERT OR REPLACE: a repeated event_id overwrites the old row instead of failing.
     public boolean saveDetection(String eventId, String personId, String personName,
                                  double x, double y, String droneId, String timestamp,
                                  String route, int hopCount, boolean delivered) {
 
         String sql = """
-            INSERT INTO detections
+            INSERT OR REPLACE INTO detections
             (event_id, person_id, person_name, x, y, drone_id, timestamp, route, hop_count, delivered)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
         """;
@@ -54,15 +68,40 @@ public class DetectionDAO {
             return true;
 
         } catch (SQLException e) {
-            System.out.println("Failed to save detection: " + e.getMessage());
+            System.err.println("Failed to save detection to SQLite: " + e.getMessage());
             return false;
         }
     }
 
-    // Retrieve all detection events (detection history)
+    // Update an existing detection once its packet reaches the tower
+    public boolean updateDeliveryStatus(DetectionEvent event) {
+        if (event == null) return false;
+        String sql = """
+            UPDATE detections
+            SET delivered = ?, route = ?, hop_count = ?
+            WHERE event_id = ?;
+        """;
+
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            statement.setInt(1, event.isSuccessfullyDelivered() ? 1 : 0);
+            statement.setString(2, event.getRouteString());
+            statement.setInt(3, event.getHopCount());
+            statement.setString(4, event.getEventId());
+
+            return statement.executeUpdate() > 0;
+
+        } catch (SQLException e) {
+            System.err.println("Failed to update delivery status in SQLite: " + e.getMessage());
+            return false;
+        }
+    }
+
+    // Retrieve all detection events (detection history) from SQLite
     public List<DetectionRecord> getAllDetections() {
         List<DetectionRecord> detections = new ArrayList<>();
-        String sql = "SELECT * FROM detections;";
+        String sql = "SELECT * FROM detections ORDER BY timestamp ASC;";
 
         try (Connection connection = DatabaseManager.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql);
@@ -73,13 +112,13 @@ public class DetectionDAO {
             }
 
         } catch (SQLException e) {
-            System.out.println("Failed to retrieve detections: " + e.getMessage());
+            System.err.println("Failed to retrieve detections from SQLite: " + e.getMessage());
         }
 
         return detections;
     }
 
-    // Find a single detection event by its event ID
+    // Find a single detection by its event ID
     public DetectionRecord findById(String eventId) {
         String sql = "SELECT * FROM detections WHERE event_id = ?;";
 
@@ -95,10 +134,34 @@ public class DetectionDAO {
             }
 
         } catch (SQLException e) {
-            System.out.println("Failed to find detection: " + e.getMessage());
+            System.err.println("Failed to find detection in SQLite: " + e.getMessage());
         }
 
-        return null; // not found
+        return null;
+    }
+
+    public int getCount() {
+        String sql = "SELECT COUNT(*) FROM detections;";
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql);
+             ResultSet rs = statement.executeQuery()) {
+            if (rs.next()) {
+                return rs.getInt(1);
+            }
+        } catch (SQLException e) {
+            System.err.println("Failed to get detection count: " + e.getMessage());
+        }
+        return 0;
+    }
+
+    public void clear() {
+        String sql = "DELETE FROM detections;";
+        try (Connection connection = DatabaseManager.getConnection();
+             Statement statement = connection.createStatement()) {
+            statement.executeUpdate(sql);
+        } catch (SQLException e) {
+            System.err.println("Failed to clear detections table: " + e.getMessage());
+        }
     }
 
     // Helper: maps a ResultSet row into a DetectionRecord object
@@ -144,5 +207,16 @@ public class DetectionDAO {
             this.hopCount = hopCount;
             this.delivered = delivered;
         }
+
+        public String getEventId() { return eventId; }
+        public String getPersonId() { return personId; }
+        public String getPersonName() { return personName; }
+        public double getX() { return x; }
+        public double getY() { return y; }
+        public String getDroneId() { return droneId; }
+        public String getTimestamp() { return timestamp; }
+        public String getRoute() { return route; }
+        public int getHopCount() { return hopCount; }
+        public boolean isDelivered() { return delivered; }
     }
 }
