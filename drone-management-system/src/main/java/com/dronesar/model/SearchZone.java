@@ -83,11 +83,18 @@ public class SearchZone {
     }
 
     public synchronized void recordSweep(Position dronePos, double sensorRadius) {
-        if (!contains(dronePos)) return;
+        if (dronePos == null) return;
+
+        // Bounding box overlap check with sensor radius
+        if (dronePos.getX() + sensorRadius < minX || dronePos.getX() - sensorRadius > maxX ||
+            dronePos.getY() + sensorRadius < minY || dronePos.getY() - sensorRadius > maxY) {
+            return;
+        }
 
         double cellWidth = getWidth() / GRID_CELLS_X;
         double cellHeight = getHeight() / GRID_CELLS_Y;
 
+        boolean anyUpdated = false;
         for (int i = 0; i < GRID_CELLS_X; i++) {
             double cellCenterX = minX + (i + 0.5) * cellWidth;
             for (int j = 0; j < GRID_CELLS_Y; j++) {
@@ -96,17 +103,20 @@ public class SearchZone {
                 Position cellCenter = new Position(cellCenterX, cellCenterY);
                 if (dronePos.distanceTo(cellCenter) <= sensorRadius) {
                     sweptCells[i][j] = true;
+                    anyUpdated = true;
                 }
             }
         }
 
-        int totalSwept = 0;
-        for (int i = 0; i < GRID_CELLS_X; i++) {
-            for (int j = 0; j < GRID_CELLS_Y; j++) {
-                if (sweptCells[i][j]) totalSwept++;
+        if (anyUpdated) {
+            int totalSwept = 0;
+            for (int i = 0; i < GRID_CELLS_X; i++) {
+                for (int j = 0; j < GRID_CELLS_Y; j++) {
+                    if (sweptCells[i][j]) totalSwept++;
+                }
             }
+            this.coveragePercentage = (totalSwept * 100.0) / (GRID_CELLS_X * GRID_CELLS_Y);
         }
-        this.coveragePercentage = (totalSwept * 100.0) / (GRID_CELLS_X * GRID_CELLS_Y);
     }
 
     public boolean isCellSwept(int i, int j) {

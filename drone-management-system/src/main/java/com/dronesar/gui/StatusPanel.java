@@ -12,150 +12,107 @@ import com.dronesar.model.enums.DroneState;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.MatteBorder;
-import javax.swing.table.DefaultTableCellRenderer;
-import javax.swing.table.DefaultTableModel;
+import javax.swing.plaf.basic.BasicScrollBarUI;
 import java.awt.*;
-import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.geom.RoundRectangle2D;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * Status and Telemetry panel displaying active drones, direct dual-tower link status,
- * individual drone command controls, and real-time SAR event logs.
+ * Modernized Right Sidebar Panel:
+ *  - Custom-rendered mini telemetry cards for each UAV.
+ *  - Displays Callsign, State Chip, Graphical Battery Bar, and Comms Link.
+ *  - Sleek modern scrollbar matching the dark cyber UI.
+ *  - Tactical UAV command controls.
  */
 public class StatusPanel extends JPanel implements SimulationEventListener {
 
     private final SimulationController controller;
     private ForestCanvas forestCanvas;
-    private final JTable droneTable;
-    private final DefaultTableModel tableModel;
-    private final JTextArea eventLogArea;
-    private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm:ss");
+
+    // UAV Telemetry Cards Container
+    private final JPanel droneCardsContainer;
+    private final List<UavCardView> uavCardViews = new ArrayList<>();
+    private String selectedDroneId = null;
 
     public StatusPanel(SimulationController controller) {
         this.controller = controller;
 
-        setLayout(new BorderLayout(0, 8));
+        setLayout(new BorderLayout(0, 6));
         setBackground(Theme.BG_PANEL);
-        setPreferredSize(new Dimension(390, 560));
+        setPreferredSize(new Dimension(305, 560));
         setBorder(new MatteBorder(0, 1, 0, 0, Theme.BORDER_SUBTLE));
 
-        // 1. Top Header
+        // 1. Top Section: Header
         JPanel headerPanel = new JPanel(new BorderLayout());
         headerPanel.setBackground(Theme.BG_PANEL);
-        headerPanel.setBorder(new EmptyBorder(10, 14, 4, 14));
+        headerPanel.setBorder(new EmptyBorder(12, 14, 8, 14));
 
-        JLabel titleLabel = new JLabel("FLEET TELEMETRY & TOWER FEED");
-        titleLabel.setFont(Theme.FONT_HEADING);
+        JLabel titleLabel = new JLabel("SWARM TELEMETRY");
+        titleLabel.setFont(Theme.FONT_TITLE);
         titleLabel.setForeground(Theme.CYAN_ACCENT);
+
+        JLabel subCount = new JLabel(controller.getDrones().size() + " UAVs");
+        subCount.setFont(Theme.FONT_BODY);
+        subCount.setForeground(Theme.TEXT_SECONDARY);
+
         headerPanel.add(titleLabel, BorderLayout.WEST);
+        headerPanel.add(subCount, BorderLayout.EAST);
+        add(headerPanel, BorderLayout.NORTH);
 
-        // 2. Drone Telemetry Table
-        String[] columnNames = {"ID", "Zone", "Status", "Batt", "Tower Link"};
-        tableModel = new DefaultTableModel(columnNames, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false;
-            }
-        };
+        // 2. Center Section: Scrollable UAV Cards Container
+        droneCardsContainer = new JPanel();
+        droneCardsContainer.setLayout(new BoxLayout(droneCardsContainer, BoxLayout.Y_AXIS));
+        droneCardsContainer.setBackground(Theme.BG_DARK);
+        droneCardsContainer.setBorder(new EmptyBorder(6, 8, 6, 8));
 
-        droneTable = new JTable(tableModel);
-        droneTable.setBackground(Theme.BG_DARK);
-        droneTable.setForeground(Theme.TEXT_PRIMARY);
-        droneTable.setGridColor(Theme.BORDER_SUBTLE);
-        droneTable.setRowHeight(22);
-        droneTable.setFont(Theme.FONT_SMALL);
-        droneTable.getTableHeader().setBackground(Theme.BG_CONTROL);
-        droneTable.getTableHeader().setForeground(Theme.TEXT_SECONDARY);
-        droneTable.getTableHeader().setFont(Theme.FONT_SMALL);
-        droneTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        JScrollPane cardsScroll = new JScrollPane(droneCardsContainer);
+        cardsScroll.setBorder(new MatteBorder(1, 0, 1, 0, Theme.BORDER_SUBTLE));
+        cardsScroll.getViewport().setBackground(Theme.BG_DARK);
+        cardsScroll.getVerticalScrollBar().setUnitIncrement(12);
 
-        // Selection Listener: highlight drone on canvas when table row selected
-        droneTable.getSelectionModel().addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting()) {
-                int row = droneTable.getSelectedRow();
-                if (row >= 0 && row < tableModel.getRowCount()) {
-                    String id = (String) tableModel.getValueAt(row, 0);
-                    if (forestCanvas != null) {
-                        forestCanvas.setSelectedDroneId(id);
-                    }
-                }
-            }
-        });
+        ModernScrollBarUI.apply(cardsScroll);
 
-        // Custom Cell Renderer for status and tower links
-        droneTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
-            @Override
-            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
-                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-                c.setBackground(isSelected ? Theme.BG_CONTROL : Theme.BG_DARK);
+        add(cardsScroll, BorderLayout.CENTER);
 
-                if (column == 2) { // Status column
-                    String status = String.valueOf(value);
-                    if ("SEARCHING".equals(status)) setForeground(Theme.GREEN_ONLINE);
-                    else if ("PERSON_FOUND".equals(status)) setForeground(Theme.AMBER_WARN);
-                    else if ("IDLE".equals(status)) setForeground(Theme.TEXT_MUTED);
-                    else if ("OFFLINE".equals(status)) setForeground(Theme.RED_ALERT);
-                    else setForeground(Theme.TEXT_PRIMARY);
-                } else if (column == 4) { // Tower Link column
-                    String link = String.valueOf(value);
-                    if (link != null && link.startsWith("BASE-")) setForeground(Theme.CYAN_ACCENT);
-                    else setForeground(Theme.TEXT_MUTED);
-                } else {
-                    setForeground(Theme.TEXT_PRIMARY);
-                }
-                return c;
-            }
-        });
-
-        JScrollPane tableScrollPane = new JScrollPane(droneTable);
-        tableScrollPane.setPreferredSize(new Dimension(370, 160));
-        tableScrollPane.setBorder(new MatteBorder(1, 0, 1, 0, Theme.BORDER_SUBTLE));
-        tableScrollPane.getViewport().setBackground(Theme.BG_DARK);
-
-        // 3. Individual Drone Tactical Control Buttons
+        // 3. Bottom Section: 4 Tactical Command Buttons
         JPanel droneControlBox = new JPanel(new GridLayout(2, 2, 6, 6));
         droneControlBox.setBackground(Theme.BG_PANEL);
-        droneControlBox.setBorder(new EmptyBorder(6, 12, 6, 12));
+        droneControlBox.setBorder(new EmptyBorder(8, 12, 10, 12));
 
-        JButton btnPauseResume = createCommandButton("⏸ / ▶ Pause/Resume", Theme.CYAN_ACCENT);
+        JButton btnPauseResume = createCommandButton("Pause / Resume", Theme.CYAN_ACCENT);
         btnPauseResume.addActionListener(e -> {
-            String selectedId = getSelectedDroneId();
-            if (selectedId != null) {
-                controller.toggleDronePause(selectedId);
-                logEvent("CMD", "Drone " + selectedId + " pause state toggled.");
+            if (selectedDroneId != null) {
+                controller.toggleDronePause(selectedDroneId);
             } else {
                 showSelectDroneAlert();
             }
         });
 
-        JButton btnResumeSearch = createCommandButton("🔄 Sweep Sector", Theme.GREEN_ONLINE);
+        JButton btnResumeSearch = createCommandButton("Sweep", Theme.GREEN_ONLINE);
         btnResumeSearch.addActionListener(e -> {
-            String selectedId = getSelectedDroneId();
-            if (selectedId != null) {
-                controller.resumeDroneSearch(selectedId);
-                logEvent("CMD", "Drone " + selectedId + " ordered to resume sector sweep.");
+            if (selectedDroneId != null) {
+                controller.resumeDroneSearch(selectedDroneId);
             } else {
                 showSelectDroneAlert();
             }
         });
 
-        JButton btnRecall = createCommandButton("🏠 Recall to Base", Theme.BLUE_TOWER);
+        JButton btnRecall = createCommandButton("Recall", Theme.BLUE_TOWER);
         btnRecall.addActionListener(e -> {
-            String selectedId = getSelectedDroneId();
-            if (selectedId != null) {
-                controller.recallDroneToBase(selectedId);
-                logEvent("CMD", "Drone " + selectedId + " recalled to nearest Base Tower.");
+            if (selectedDroneId != null) {
+                controller.recallDroneToBase(selectedDroneId);
             } else {
                 showSelectDroneAlert();
             }
         });
 
-        JButton btnToggleFail = createCommandButton("⚠️ Toggle Fail", Theme.AMBER_WARN);
+        JButton btnToggleFail = createCommandButton("Fail UAV", Theme.AMBER_WARN);
         btnToggleFail.addActionListener(e -> {
-            String selectedId = getSelectedDroneId();
-            if (selectedId != null) {
-                controller.toggleDroneFailure(selectedId);
-                logEvent("ALERT", "Drone " + selectedId + " failure toggled.");
+            if (selectedDroneId != null) {
+                controller.toggleDroneFailure(selectedDroneId);
             } else {
                 showSelectDroneAlert();
             }
@@ -166,138 +123,253 @@ public class StatusPanel extends JPanel implements SimulationEventListener {
         droneControlBox.add(btnRecall);
         droneControlBox.add(btnToggleFail);
 
-        JPanel tableWrapper = new JPanel(new BorderLayout(0, 4));
-        tableWrapper.setBackground(Theme.BG_PANEL);
-        tableWrapper.add(tableScrollPane, BorderLayout.CENTER);
-        tableWrapper.add(droneControlBox, BorderLayout.SOUTH);
-
-        // 4. Real-Time Event Log Feed
-        JPanel logPanel = new JPanel(new BorderLayout(0, 4));
-        logPanel.setBackground(Theme.BG_PANEL);
-        logPanel.setBorder(new EmptyBorder(4, 12, 10, 12));
-
-        JLabel logHeader = new JLabel("MISSION INCIDENTS & TOWER DISPATCH");
-        logHeader.setFont(Theme.FONT_HEADING);
-        logHeader.setForeground(Theme.BLUE_TOWER);
-        logPanel.add(logHeader, BorderLayout.NORTH);
-
-        eventLogArea = new JTextArea();
-        eventLogArea.setEditable(false);
-        eventLogArea.setBackground(Theme.BG_DARK);
-        eventLogArea.setForeground(Theme.TEXT_PRIMARY);
-        eventLogArea.setFont(Theme.FONT_MONO);
-        eventLogArea.setLineWrap(true);
-        eventLogArea.setWrapStyleWord(true);
-
-        JScrollPane logScrollPane = new JScrollPane(eventLogArea);
-        logScrollPane.setBorder(BorderFactory.createLineBorder(Theme.BORDER_SUBTLE));
-        logPanel.add(logScrollPane, BorderLayout.CENTER);
-
-        // Assemble status panel
-        JPanel centerContainer = new JPanel(new BorderLayout());
-        centerContainer.setBackground(Theme.BG_PANEL);
-        centerContainer.add(tableWrapper, BorderLayout.NORTH);
-        centerContainer.add(logPanel, BorderLayout.CENTER);
-
-        add(headerPanel, BorderLayout.NORTH);
-        add(centerContainer, BorderLayout.CENTER);
+        add(droneControlBox, BorderLayout.SOUTH);
 
         // Register to event bus
         SimulationEventBus.getInstance().registerListener(this);
-        logEvent("SYS", "Dual-Tower Comms & Mission Center online.");
+        initDroneCards();
     }
 
     public void setForestCanvas(ForestCanvas canvas) {
         this.forestCanvas = canvas;
     }
 
-    public void setSelectedDroneInTable(String droneId) {
-        if (droneId == null) return;
-        for (int i = 0; i < tableModel.getRowCount(); i++) {
-            if (droneId.equals(tableModel.getValueAt(i, 0))) {
-                droneTable.setRowSelectionInterval(i, i);
-                break;
-            }
+    public void setSelectedDrone(String droneId) {
+        this.selectedDroneId = droneId;
+        for (UavCardView card : uavCardViews) {
+            card.setSelected(card.droneId.equals(droneId));
         }
-    }
-
-    private String getSelectedDroneId() {
-        int row = droneTable.getSelectedRow();
-        if (row >= 0 && row < tableModel.getRowCount()) {
-            return (String) tableModel.getValueAt(row, 0);
-        }
-        return null;
+        repaint();
     }
 
     private void showSelectDroneAlert() {
-        JOptionPane.showMessageDialog(this, "Please select a drone from the table or click on a drone on the radar map.", "Target Selection Required", JOptionPane.INFORMATION_MESSAGE);
+        JOptionPane.showMessageDialog(this, "Please select a UAV card or click a drone on the radar map.", "Target Selection Required", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private JButton createCommandButton(String text, Color accent) {
         JButton btn = new JButton(text);
-        btn.setFont(Theme.FONT_SMALL);
+        btn.setFont(Theme.FONT_HEADING);
         btn.setBackground(Theme.BG_CONTROL);
         btn.setForeground(accent);
         btn.setFocusPainted(false);
-        btn.setBorder(BorderFactory.createLineBorder(Theme.BORDER_SUBTLE, 1));
+        btn.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(Theme.BORDER_SUBTLE, 1),
+                new EmptyBorder(7, 10, 7, 10)
+        ));
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
         return btn;
     }
 
-    public void updateTelemetryTable() {
-        int rowCount = tableModel.getRowCount();
-        java.util.List<Drone> drones = controller.getDrones();
+    private void initDroneCards() {
+        droneCardsContainer.removeAll();
+        uavCardViews.clear();
 
-        if (rowCount != drones.size()) {
-            tableModel.setRowCount(0);
-            for (Drone d : drones) {
-                tableModel.addRow(new Object[]{d.getId(), "", "", "", ""});
+        for (Drone d : controller.getDrones()) {
+            UavCardView card = new UavCardView(d);
+            uavCardViews.add(card);
+            droneCardsContainer.add(card);
+            droneCardsContainer.add(Box.createVerticalStrut(6));
+        }
+        droneCardsContainer.revalidate();
+        droneCardsContainer.repaint();
+    }
+
+    public void updateTelemetryTable() {
+        if (uavCardViews.size() != controller.getDrones().size()) {
+            initDroneCards();
+        }
+
+        // Update each card's live telemetry
+        for (UavCardView card : uavCardViews) {
+            Drone d = controller.getDrone(card.droneId);
+            if (d != null) {
+                card.updateTelemetry(d);
             }
         }
-
-        for (int i = 0; i < drones.size(); i++) {
-            Drone d = drones.get(i);
-            Tower connectedTower = controller.getNearestTowerInRange(d);
-            tableModel.setValueAt(d.getId(), i, 0);
-            tableModel.setValueAt(d.getAssignedZoneId(), i, 1);
-            tableModel.setValueAt(d.getState().name(), i, 2);
-            tableModel.setValueAt(String.format("%.0f%%", d.getBatteryLevel()), i, 3);
-            tableModel.setValueAt(connectedTower != null ? connectedTower.getId().replace("BASE-", "") : "NO LINK", i, 4);
-        }
     }
 
-    public void logEvent(String tag, String message) {
-        String timestamp = LocalTime.now().format(TIME_FMT);
-        String entry = String.format("[%s] [%s] %s\n", timestamp, tag, message);
-        SwingUtilities.invokeLater(() -> {
-            eventLogArea.append(entry);
-            eventLogArea.setCaretPosition(eventLogArea.getDocument().getLength());
-        });
+    public void resetSurvivorsTable() {
+        initDroneCards();
     }
+
+    @Override
+    public void onPersonDetected(DetectionEvent event) {}
 
     @Override
     public void onDroneMoved(String droneId, Position newPos, double heading) {}
 
     @Override
-    public void onPersonDetected(DetectionEvent event) {
-        logEvent("DETECT", "Survivor FOUND: " + event.getPersonName() + " (" + event.getPersonId() + ") by " + event.getOriginDroneId());
-    }
-
-    @Override
     public void onZoneCoverageUpdated(String zoneId, double coveragePercentage) {}
 
     @Override
-    public void onDroneStatusChanged(String droneId, DroneState newStatus) {
-        logEvent("STATUS", "Drone " + droneId + " switched state -> " + newStatus);
-    }
+    public void onDroneStatusChanged(String droneId, DroneState newStatus) {}
 
     @Override
-    public void onDirectTransmission(String droneId, String towerId, DetectionEvent event) {
-        logEvent("COMMS", "Direct transmission beam: " + droneId + " -> " + towerId + " for target " + event.getPersonName());
-    }
+    public void onDirectTransmission(String droneId, String towerId, DetectionEvent event) {}
 
     @Override
-    public void onPacketDeliveredToTower(DetectionEvent event) {
-        logEvent("BASE", "CONFIRMED: " + event.getPersonName() + " logged at Base Tower! Rescue team notified.");
+    public void onPacketDeliveredToTower(DetectionEvent event) {}
+
+
+
+    /**
+     * Custom-rendered mini telemetry card widget for an individual UAV.
+     */
+    private class UavCardView extends JPanel {
+        private final String droneId;
+        private boolean isCardSelected = false;
+
+        private final JLabel lblCallsign;
+        private final JLabel lblStateBadge;
+        private final JLabel lblBatteryPct;
+        private final JProgressBar batteryBar;
+        private final JLabel lblCommsLink;
+
+        public UavCardView(Drone drone) {
+            this.droneId = drone.getId();
+
+            setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
+            setBackground(Theme.BG_CARD);
+            setBorder(new EmptyBorder(8, 12, 8, 12));
+            setMaximumSize(new Dimension(285, 84));
+            setPreferredSize(new Dimension(280, 80));
+            setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+            // Row 1: Callsign & State Badge
+            JPanel row1 = new JPanel(new BorderLayout());
+            row1.setBackground(Theme.BG_CARD);
+
+            lblCallsign = new JLabel(drone.getCallsign() + " [" + drone.getId() + "]");
+            lblCallsign.setFont(Theme.FONT_HEADING);
+            lblCallsign.setForeground(Theme.TEXT_PRIMARY);
+
+            lblStateBadge = new JLabel(drone.getState().name());
+            lblStateBadge.setFont(new Font("SansSerif", Font.BOLD, 12));
+            updateStateBadge(drone.getState());
+
+            row1.add(lblCallsign, BorderLayout.WEST);
+            row1.add(lblStateBadge, BorderLayout.EAST);
+
+            // Row 2: Battery Graphical Bar & %
+            JPanel row2 = new JPanel(new BorderLayout(8, 0));
+            row2.setBackground(Theme.BG_CARD);
+
+            batteryBar = new JProgressBar(0, 100);
+            batteryBar.setValue((int) drone.getBatteryLevel());
+            batteryBar.setPreferredSize(new Dimension(160, 8));
+            batteryBar.setBackground(new Color(33, 38, 45));
+            batteryBar.setBorderPainted(false);
+            updateBatteryColor(drone.getBatteryLevel());
+
+            lblBatteryPct = new JLabel(String.format("%.0f%%", drone.getBatteryLevel()));
+            lblBatteryPct.setFont(Theme.FONT_BODY);
+            lblBatteryPct.setForeground(Theme.TEXT_SECONDARY);
+
+            row2.add(batteryBar, BorderLayout.CENTER);
+            row2.add(lblBatteryPct, BorderLayout.EAST);
+
+            // Row 3: Comms Link Status
+            JPanel row3 = new JPanel(new BorderLayout());
+            row3.setBackground(Theme.BG_CARD);
+
+            lblCommsLink = new JLabel("Connecting...");
+            lblCommsLink.setFont(Theme.FONT_BODY);
+            lblCommsLink.setForeground(Theme.TEXT_MUTED);
+            row3.add(lblCommsLink, BorderLayout.WEST);
+
+            add(row1);
+            add(Box.createVerticalStrut(3));
+            add(row2);
+            add(Box.createVerticalStrut(3));
+            add(row3);
+
+            // Card click listener
+            addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    setSelectedDrone(droneId);
+                    if (forestCanvas != null) {
+                        forestCanvas.setSelectedDroneId(droneId);
+                    }
+                }
+            });
+
+            updateTelemetry(drone);
+        }
+
+        public void setSelected(boolean sel) {
+            this.isCardSelected = sel;
+            repaint();
+        }
+
+        public void updateTelemetry(Drone d) {
+            lblCallsign.setText(d.getCallsign() + " [" + d.getId() + "]");
+            updateStateBadge(d.getState());
+
+            double batt = d.getBatteryLevel();
+            batteryBar.setValue((int) batt);
+            lblBatteryPct.setText(String.format("%.0f%%", batt));
+            updateBatteryColor(batt);
+
+            // Comms link status without emojis
+            if (!d.isOperational()) {
+                lblCommsLink.setText("Offline / Non-Operational");
+                lblCommsLink.setForeground(Theme.RED_ALERT);
+            } else if (controller.isDroneInTowerRange(d)) {
+                Tower t = controller.getNearestTowerInRange(d);
+                lblCommsLink.setText("Direct: " + (t != null ? t.getId() : "Tower"));
+                lblCommsLink.setForeground(Theme.CYAN_ACCENT);
+            } else {
+                Drone relay = controller.getMeshRelayDrone(d);
+                if (relay != null) {
+                    lblCommsLink.setText("Mesh Relay: " + relay.getCallsign());
+                    lblCommsLink.setForeground(Theme.PURPLE_RELAY);
+                } else {
+                    lblCommsLink.setText("Out of Range (Buffering)");
+                    lblCommsLink.setForeground(Theme.AMBER_WARN);
+                }
+            }
+        }
+
+        private void updateStateBadge(DroneState state) {
+            lblStateBadge.setText(state.name());
+            if (state == DroneState.SEARCHING) {
+                lblStateBadge.setForeground(Theme.GREEN_ONLINE);
+            } else if (state == DroneState.PERSON_FOUND) {
+                lblStateBadge.setForeground(Theme.AMBER_WARN);
+            } else if (state == DroneState.OFFLINE) {
+                lblStateBadge.setForeground(Theme.RED_ALERT);
+            } else {
+                lblStateBadge.setForeground(Theme.TEXT_MUTED);
+            }
+        }
+
+        private void updateBatteryColor(double batt) {
+            if (batt > 50) {
+                batteryBar.setForeground(Theme.GREEN_ONLINE);
+            } else if (batt > 20) {
+                batteryBar.setForeground(Theme.AMBER_WARN);
+            } else {
+                batteryBar.setForeground(Theme.RED_ALERT);
+            }
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            Color bg = isCardSelected ? Theme.BG_CARD_HOVER : Theme.BG_CARD;
+            g2.setColor(bg);
+            g2.fill(new RoundRectangle2D.Double(0, 0, getWidth(), getHeight(), 8, 8));
+
+            Color borderCol = isCardSelected ? Theme.CYAN_ACCENT : Theme.BORDER_SUBTLE;
+            g2.setColor(borderCol);
+            g2.setStroke(new BasicStroke(isCardSelected ? 1.5f : 1.0f));
+            g2.draw(new RoundRectangle2D.Double(0.5, 0.5, getWidth() - 1, getHeight() - 1, 8, 8));
+
+            g2.dispose();
+        }
     }
 }

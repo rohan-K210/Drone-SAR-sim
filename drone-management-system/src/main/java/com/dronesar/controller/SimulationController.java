@@ -50,6 +50,10 @@ public class SimulationController {
     }
 
     public synchronized void initDefaultScenario(int droneCount) {
+        initDefaultScenario(droneCount, 3);
+    }
+
+    public synchronized void initDefaultScenario(int droneCount, int personCount) {
         drones.clear();
         zones.clear();
         droneWaypoints.clear();
@@ -61,32 +65,43 @@ public class SimulationController {
         pendingOfflineEvents.clear();
         elapsedSimulationMillis = 0;
 
-        // 1. Establish Two Strategic Communication Towers for Full Map Coverage
-        // West Command Base (South-West)
-        towers.add(new Tower("BASE-WEST-01", "West Base Tower", new Position(70, 470), 340.0));
-        // East Outpost Base (North-East)
-        towers.add(new Tower("BASE-EAST-02", "East Base Tower", new Position(850, 95), 340.0));
+        int safeDroneCount = Math.max(1, Math.min(8, droneCount));
+        int safePersonCount = Math.max(1, Math.min(8, personCount));
 
-        int cols = (droneCount >= 8) ? 4 : 3;
-        int rows = (droneCount >= 8) ? 2 : 2;
-        int actualCount = Math.min(droneCount, cols * rows);
+        // 1. Establish Two Strategic Communication Towers for Full Map Coverage
+        // West Command Base (South-West) with Drone Helipad
+        Tower westTower = new Tower("BASE-WEST-01", "West Base Tower", new Position(70, 470), 340.0);
+        towers.add(westTower);
+        // East Outpost Base (North-East) with Drone Helipad
+        Tower eastTower = new Tower("BASE-EAST-02", "East Base Tower", new Position(850, 95), 340.0);
+        towers.add(eastTower);
 
         double zoneMarginLeft = 140.0;
         double usableWidth = mapWidth - zoneMarginLeft - 20.0;
         double usableHeight = mapHeight - 35.0;
 
-        double cellWidth = usableWidth / cols;
-        double cellHeight = usableHeight / rows;
-
+        int rows = (safeDroneCount <= 3) ? 1 : 2;
         int zoneCounter = 1;
-        for (int r = 0; r < rows; r++) {
-            for (int c = 0; c < cols; c++) {
-                if (zoneCounter > actualCount) break;
 
+        for (int r = 0; r < rows; r++) {
+            int colsInRow;
+            if (rows == 1) {
+                colsInRow = safeDroneCount;
+            } else {
+                int colsTop = (safeDroneCount + 1) / 2;
+                int colsBottom = safeDroneCount / 2;
+                colsInRow = (r == 0) ? colsTop : colsBottom;
+            }
+
+            double cellHeight = usableHeight / rows;
+            double cellWidth = usableWidth / colsInRow;
+
+            double minY = 20.0 + r * cellHeight;
+            double maxY = minY + cellHeight;
+
+            for (int c = 0; c < colsInRow; c++) {
                 double minX = zoneMarginLeft + c * cellWidth;
-                double minY = 20.0 + r * cellHeight;
                 double maxX = minX + cellWidth;
-                double maxY = minY + cellHeight;
 
                 String zoneId = "Z-" + zoneCounter;
                 String zoneName = "Sector-" + (char) ('A' + (zoneCounter - 1));
@@ -97,22 +112,31 @@ public class SimulationController {
                 zones.add(zone);
 
                 double sensorRadius = 38.0;
-                double laneSpacing = sensorRadius * 1.5;
-                List<Position> wps = SearchPattern.generateBoustrophedonWaypoints(zone, laneSpacing, 16.0);
+                double laneSpacing = sensorRadius * 1.15;
+                List<Position> wps = SearchPattern.generateBoustrophedonWaypoints(zone, laneSpacing, 1.0);
 
-                // Stagger sweep direction and starting positions so drones move independently
                 if (zoneCounter % 2 == 1 && wps.size() > 2) {
                     Collections.reverse(wps);
                 }
 
                 droneWaypoints.put(droneId, wps);
-                int startingWpIdx = (zoneCounter * 3) % Math.max(1, wps.size());
-                droneWaypointIndex.put(droneId, startingWpIdx);
+                droneWaypointIndex.put(droneId, 0);
 
-                Position startPos = (wps.isEmpty()) ? zone.getCenter() : wps.get(startingWpIdx);
+                // Stage half of the swarm at West Base Tower, and half at East Base Tower
+                int westCount = (safeDroneCount + 1) / 2;
+                boolean isWest = (zoneCounter <= westCount);
+                Tower stagingTower = isWest ? westTower : eastTower;
+                int towerIndex = isWest ? (zoneCounter - 1) : (zoneCounter - 1 - westCount);
+                int towerTotal = isWest ? westCount : (safeDroneCount - westCount);
+
+                double angle = (2.0 * Math.PI * towerIndex) / Math.max(1, towerTotal);
+                double dockRadius = 24.0;
+                double startX = stagingTower.getLocation().getX() + Math.cos(angle) * dockRadius;
+                double startY = stagingTower.getLocation().getY() + Math.sin(angle) * dockRadius;
+                Position startPos = new Position(startX, startY);
+
                 Drone drone = new Drone(droneId, callsign, zoneId, startPos, sensorRadius, 340.0);
-
-                // Give each drone a distinct operational speed (2.1 to 2.8 units)
+                drone.setState(DroneState.IDLE);
                 drone.setSpeed(2.1 + ((zoneCounter * 7) % 4) * 0.25);
                 addDrone(drone);
 
@@ -120,12 +144,25 @@ public class SimulationController {
             }
         }
 
-        // Deploy lost persons across search sectors
-        targets.add(new PersonNode("P-101", "Rahul K.", new Position(280, 110)));
-        targets.add(new PersonNode("P-102", "Ananya M.", new Position(540, 190)));
-        targets.add(new PersonNode("P-103", "Vineeth S.", new Position(780, 140)));
-        targets.add(new PersonNode("P-104", "Deepa T.", new Position(410, 410)));
-        targets.add(new PersonNode("P-105", "Arun J.", new Position(720, 450)));
+        // Dynamically randomize missing person locations across search sectors (Person 1, Person 2, ...)
+        if (!zones.isEmpty()) {
+            for (int i = 1; i <= safePersonCount; i++) {
+                String targetId = String.format("P-%03d", 100 + i);
+                String personName = "Person " + i;
+
+                SearchZone assignedZone = zones.get((i - 1) % zones.size());
+                double margin = 28.0;
+                double zMinX = assignedZone.getMinX() + margin;
+                double zMaxX = Math.max(zMinX + 10.0, assignedZone.getMaxX() - margin);
+                double zMinY = assignedZone.getMinY() + margin;
+                double zMaxY = Math.max(zMinY + 10.0, assignedZone.getMaxY() - margin);
+
+                double randX = zMinX + (Math.random() * (zMaxX - zMinX));
+                double randY = zMinY + (Math.random() * (zMaxY - zMinY));
+
+                targets.add(new PersonNode(targetId, personName, new Position(randX, randY)));
+            }
+        }
     }
 
     public synchronized void tick(double deltaSeconds) {
@@ -167,9 +204,11 @@ public class SimulationController {
                 drone.setPosition(new Position(newX, newY));
             }
 
+            for (SearchZone z : zones) {
+                z.recordSweep(drone.getPosition(), drone.getSensorRadius());
+            }
             SearchZone zone = findZoneById(drone.getAssignedZoneId());
             if (zone != null) {
-                zone.recordSweep(drone.getPosition(), drone.getSensorRadius());
                 drone.setSearchProgress(zone.getCoveragePercentage());
                 SimulationEventBus.getInstance().publishZoneCoverageUpdated(zone.getId(), zone.getCoveragePercentage());
             }
@@ -355,8 +394,8 @@ public class SimulationController {
         if (drone != null && drone.isOperational()) {
             SearchZone zone = findZoneById(drone.getAssignedZoneId());
             if (zone != null) {
-                double laneSpacing = drone.getSensorRadius() * 1.5;
-                List<Position> wps = SearchPattern.generateBoustrophedonWaypoints(zone, laneSpacing, 16.0);
+                double laneSpacing = drone.getSensorRadius() * 1.15;
+                List<Position> wps = SearchPattern.generateBoustrophedonWaypoints(zone, laneSpacing, 1.0);
                 droneWaypoints.put(droneId, wps);
                 droneWaypointIndex.put(droneId, 0);
                 drone.setState(DroneState.SEARCHING);
@@ -433,6 +472,12 @@ public class SimulationController {
 
     public void startSimulation() {
         running = true;
+        for (Drone drone : drones) {
+            if (drone.isOperational() && drone.getState() == DroneState.IDLE) {
+                drone.setState(DroneState.SEARCHING);
+                SimulationEventBus.getInstance().publishDroneStatusChanged(drone.getId(), DroneState.SEARCHING);
+            }
+        }
     }
 
     public void stopSimulation() {
@@ -441,5 +486,50 @@ public class SimulationController {
 
     public boolean isRunning() {
         return running;
+    }
+
+    public Drone getMeshRelayDrone(Drone drone) {
+        if (drone == null || !drone.isOperational()) return null;
+        if (isDroneInTowerRange(drone)) return null; // already in direct range
+
+        Drone bestRelay = null;
+        double minDistanceToTower = Double.MAX_VALUE;
+
+        for (Drone other : drones) {
+            if (other == drone || !other.isOperational()) continue;
+            double distToOther = drone.getPosition().distanceTo(other.getPosition());
+            if (distToOther <= drone.getCommunicationRadius()) {
+                if (isDroneInTowerRange(other)) {
+                    Tower t = getNearestTowerInRange(other);
+                    if (t != null) {
+                        double d = other.getPosition().distanceTo(t.getLocation());
+                        if (d < minDistanceToTower) {
+                            minDistanceToTower = d;
+                            bestRelay = other;
+                        }
+                    }
+                }
+            }
+        }
+        return bestRelay;
+    }
+
+    public double getTotalSwarmDistanceFlown() {
+        double total = 0.0;
+        for (Drone d : drones) {
+            total += d.getTotalDistanceFlown();
+        }
+        return total;
+    }
+
+    public double getAverageTimeToDetectSeconds() {
+        if (allDetectionEvents.isEmpty()) return 0.0;
+        return (elapsedSimulationMillis / 1000.0) / Math.max(1, allDetectionEvents.size());
+    }
+
+    public double getPacketIntegrityRate() {
+        if (allDetectionEvents.isEmpty()) return 100.0;
+        long delivered = allDetectionEvents.stream().filter(DetectionEvent::isSuccessfullyDelivered).count();
+        return Math.min(100.0, (double) delivered / allDetectionEvents.size() * 100.0);
     }
 }
